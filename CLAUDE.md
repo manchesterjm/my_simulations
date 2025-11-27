@@ -17,6 +17,10 @@ Physics simulations demonstrating **self-organized criticality** and **power law
 │   ├── ising_model.py
 │   ├── forest_fire.py
 │   └── run_all.py
+├── features/              # BDD specifications (Gherkin)
+│   ├── sandpile.feature
+│   ├── ising_model.feature
+│   └── forest_fire.feature
 ├── tests/                 # Test files
 │   └── test_*.py
 ├── sessions/              # Session logs (SESSION_YYYYMMDD_HHMMSS.md)
