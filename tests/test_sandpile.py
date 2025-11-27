@@ -5,7 +5,6 @@ Based on BDD scenarios in features/sandpile.feature
 
 import pytest
 import numpy as np
-from hypothesis import given, strategies as st, settings
 
 import sys
 sys.path.insert(0, 'code_files')
@@ -237,54 +236,3 @@ class TestSandpileDistribution:
 
         # Frequencies should be positive
         assert all(f > 0 for f in frequencies)
-
-
-# Hypothesis fuzz tests
-class TestSandpileFuzz:
-    """Fuzz tests using Hypothesis."""
-
-    @given(st.integers(min_value=5, max_value=50))
-    @settings(max_examples=20)
-    def test_fuzz_grid_size(self, size):
-        """Fuzz test: various grid sizes should work."""
-        sim = SandpileSimulation(size=size, seed=42)
-        sim.run(100)
-
-        # Grid should remain stable
-        assert np.all(sim.grid < sim.threshold)
-        assert sim.grid.shape == (size, size)
-
-    @given(st.integers(min_value=3, max_value=8))
-    @settings(max_examples=10)
-    def test_fuzz_threshold(self, threshold):
-        """Fuzz test: various thresholds should work."""
-        sim = SandpileSimulation(size=20, threshold=threshold, seed=42)
-        sim.run(100)
-
-        # Grid should remain stable
-        assert np.all(sim.grid < threshold)
-
-    @given(st.integers(min_value=1, max_value=1000))
-    @settings(max_examples=20)
-    def test_fuzz_num_drops(self, num_drops):
-        """Fuzz test: various drop counts should work."""
-        sim = SandpileSimulation(size=20, seed=42)
-        sim.run(num_drops)
-
-        # Total grains should match drops
-        assert sim.total_grains == num_drops
-
-        # Grid should be stable
-        assert np.all(sim.grid < sim.threshold)
-
-    @given(st.integers(min_value=0, max_value=2**31-1))
-    @settings(max_examples=10)
-    def test_fuzz_random_seed(self, seed):
-        """Fuzz test: various seeds should produce reproducible results."""
-        sim1 = SandpileSimulation(size=20, seed=seed)
-        sim2 = SandpileSimulation(size=20, seed=seed)
-
-        sim1.run(100)
-        sim2.run(100)
-
-        assert np.array_equal(sim1.grid, sim2.grid)

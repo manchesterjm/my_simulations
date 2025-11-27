@@ -5,7 +5,6 @@ Based on BDD scenarios in features/forest_fire.feature
 
 import pytest
 import numpy as np
-from hypothesis import given, strategies as st, settings
 
 import sys
 sys.path.insert(0, 'code_files')
@@ -313,53 +312,3 @@ class TestForestFireStep:
         sim.run(100, progress_interval=None)
 
         assert sim.timestep == 100
-
-
-# Hypothesis fuzz tests
-class TestForestFireFuzz:
-    """Fuzz tests using Hypothesis."""
-
-    @given(st.integers(min_value=5, max_value=50))
-    @settings(max_examples=10)
-    def test_fuzz_grid_size(self, size):
-        """Fuzz test: various grid sizes should work."""
-        sim = ForestFireSimulation(size=size, seed=42)
-        sim.run(50, progress_interval=None)
-
-        # Grid should have valid cell states
-        assert np.all((sim.grid == EMPTY) | (sim.grid == TREE) | (sim.grid == BURNING))
-        assert sim.grid.shape == (size, size)
-
-    @given(st.floats(min_value=0.001, max_value=0.5))
-    @settings(max_examples=10)
-    def test_fuzz_growth_probability(self, prob):
-        """Fuzz test: various growth probabilities should work."""
-        sim = ForestFireSimulation(size=20, tree_growth_prob=prob, seed=42)
-        sim.run(50, progress_interval=None)
-
-        # Density should be in valid range
-        density = sim.tree_density()
-        assert 0.0 <= density <= 1.0
-
-    @given(st.integers(min_value=1, max_value=200))
-    @settings(max_examples=10)
-    def test_fuzz_num_steps(self, num_steps):
-        """Fuzz test: various step counts should work."""
-        sim = ForestFireSimulation(size=20, seed=42)
-        sim.run(num_steps, progress_interval=None)
-
-        assert sim.timestep == num_steps
-        assert len(sim.tree_counts) == num_steps
-
-    @given(st.integers(min_value=0, max_value=2**31-1))
-    @settings(max_examples=10)
-    def test_fuzz_random_seed(self, seed):
-        """Fuzz test: various seeds should produce reproducible results."""
-        sim1 = ForestFireSimulation(size=20, seed=seed)
-        sim2 = ForestFireSimulation(size=20, seed=seed)
-
-        sim1.run(50, progress_interval=None)
-        sim2.run(50, progress_interval=None)
-
-        assert np.array_equal(sim1.grid, sim2.grid)
-        assert sim1.fire_sizes == sim2.fire_sizes

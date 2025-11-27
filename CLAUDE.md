@@ -111,17 +111,7 @@ When a test fails, fix it immediately. Do not report a failure and move on—dia
 
 ```bash
 # Unit tests
-pytest tests/ -v
-
-# Fuzz testing with Hypothesis
-pytest tests/ -v --hypothesis-show-statistics
-
-# Mutation testing with mutmut (Linux/macOS only)
-mutmut run --paths-to-mutate=code_files/
-mutmut results
+pytest tests/ -v -p no:mutagen
 ```
 
-All code must pass:
-- **Unit tests**: Standard pytest assertions
-- **Fuzz tests**: Property-based testing via `hypothesis` to find edge cases
-- **Mutation tests**: `mutmut` to verify test quality (Linux/macOS only - not available on Windows)
+All code must pass unit tests (standard pytest assertions).

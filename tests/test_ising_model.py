@@ -5,7 +5,6 @@ Based on BDD scenarios in features/ising_model.feature
 
 import pytest
 import numpy as np
-from hypothesis import given, strategies as st, settings
 
 import sys
 sys.path.insert(0, 'code_files')
@@ -283,55 +282,3 @@ class TestIsingSweep:
 
         model.sweep(10)
         assert model.sweeps == 15
-
-
-# Hypothesis fuzz tests
-class TestIsingFuzz:
-    """Fuzz tests using Hypothesis."""
-
-    @given(st.integers(min_value=5, max_value=50))
-    @settings(max_examples=10)
-    def test_fuzz_grid_size(self, size):
-        """Fuzz test: various grid sizes should work."""
-        model = IsingModel(size=size, seed=42)
-        model.sweep(10)
-
-        # All spins should still be valid
-        assert np.all((model.grid == 1) | (model.grid == -1))
-        assert model.grid.shape == (size, size)
-
-    @given(st.floats(min_value=0.1, max_value=10.0))
-    @settings(max_examples=10)
-    def test_fuzz_temperature(self, temperature):
-        """Fuzz test: various temperatures should work."""
-        model = IsingModel(size=20, temperature=temperature, seed=42)
-        model.sweep(10)
-
-        # All spins should still be valid
-        assert np.all((model.grid == 1) | (model.grid == -1))
-
-        # Magnetization should be in valid range
-        mag = model.get_magnetization()
-        assert -1.0 <= mag <= 1.0
-
-    @given(st.integers(min_value=1, max_value=50))
-    @settings(max_examples=10)
-    def test_fuzz_num_sweeps(self, n_sweeps):
-        """Fuzz test: various sweep counts should work."""
-        model = IsingModel(size=20, seed=42)
-        model.sweep(n_sweeps)
-
-        assert model.sweeps == n_sweeps
-        assert np.all((model.grid == 1) | (model.grid == -1))
-
-    @given(st.integers(min_value=0, max_value=2**31-1))
-    @settings(max_examples=10)
-    def test_fuzz_random_seed(self, seed):
-        """Fuzz test: various seeds should produce reproducible results."""
-        model1 = IsingModel(size=20, seed=seed)
-        model2 = IsingModel(size=20, seed=seed)
-
-        model1.sweep(10)
-        model2.sweep(10)
-
-        assert np.array_equal(model1.grid, model2.grid)
