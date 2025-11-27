@@ -111,12 +111,12 @@ When a test fails, fix it immediately. Do not report a failure and move on—dia
 
 ```bash
 # Unit tests
-pytest -c support_files/pytest.ini
+pytest tests/ -v
 
 # Fuzz testing with Hypothesis
-pytest -c support_files/pytest.ini --hypothesis-show-statistics
+pytest tests/ -v --hypothesis-show-statistics
 
-# Mutation testing with mutmut
+# Mutation testing with mutmut (Linux/macOS only)
 mutmut run --paths-to-mutate=code_files/
 mutmut results
 ```
@@ -124,4 +124,4 @@ mutmut results
 All code must pass:
 - **Unit tests**: Standard pytest assertions
 - **Fuzz tests**: Property-based testing via `hypothesis` to find edge cases
-- **Mutation tests**: `mutmut` to verify test quality (tests should catch mutations)
+- **Mutation tests**: `mutmut` to verify test quality (Linux/macOS only - not available on Windows)

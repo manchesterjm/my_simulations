@@ -34,10 +34,7 @@ class ForestFireSimulation:
         self.f = lightning_prob if lightning_prob is not None else tree_growth_prob / 10
         self.rng = np.random.default_rng(seed)
 
-        # Initialize grid (start with some trees)
         self.grid = np.zeros((size, size), dtype=np.int32)
-
-        # Statistics
         self.timestep = 0
         self.fire_sizes = []
         self.tree_counts = []
@@ -50,11 +47,20 @@ class ForestFireSimulation:
         """Calculate tree density."""
         return self.count_trees() / (self.size * self.size)
 
+    def _get_moore_neighbors(self, i, j):
+        """Get valid Moore neighborhood positions (8 neighbors)."""
+        neighbors = []
+        for di in [-1, 0, 1]:
+            for dj in [-1, 0, 1]:
+                if di == 0 and dj == 0:
+                    continue
+                ni, nj = i + di, j + dj
+                if 0 <= ni < self.size and 0 <= nj < self.size:
+                    neighbors.append((ni, nj))
+        return neighbors
+
     def spread_fire(self, start_i, start_j):
-        """
-        Spread fire from a starting point using BFS.
-        Returns the number of trees burned.
-        """
+        """Spread fire from a starting point using BFS. Returns trees burned."""
         if self.grid[start_i, start_j] != TREE:
             return 0
 
@@ -66,43 +72,42 @@ class ForestFireSimulation:
             i, j = queue.popleft()
             burned += 1
 
-            # Check 8 neighbors (Moore neighborhood)
-            for di in [-1, 0, 1]:
-                for dj in [-1, 0, 1]:
-                    if di == 0 and dj == 0:
-                        continue
-                    ni, nj = i + di, j + dj
-                    # Boundary check (no wrapping for fires)
-                    if 0 <= ni < self.size and 0 <= nj < self.size:
-                        if self.grid[ni, nj] == TREE:
-                            self.grid[ni, nj] = BURNING
-                            queue.append((ni, nj))
+            for ni, nj in self._get_moore_neighbors(i, j):
+                if self.grid[ni, nj] == TREE:
+                    self.grid[ni, nj] = BURNING
+                    queue.append((ni, nj))
 
         return burned
 
-    def step(self):
-        """Perform one simulation step."""
-        self.timestep += 1
-
-        # First, burning cells become empty
+    def _clear_burning_cells(self):
+        """Convert burning cells to empty."""
         self.grid[self.grid == BURNING] = EMPTY
 
-        # Tree growth: empty cells may become trees
+    def _grow_trees(self):
+        """Grow new trees on empty cells."""
         empty_mask = self.grid == EMPTY
         grow_mask = self.rng.random((self.size, self.size)) < self.p
         self.grid[empty_mask & grow_mask] = TREE
 
-        # Lightning strikes: trees may catch fire
+    def _try_lightning_strike(self):
+        """Attempt a lightning strike on a random tree."""
         tree_positions = np.argwhere(self.grid == TREE)
-        if len(tree_positions) > 0:
-            # Lightning can strike any tree with probability f
-            for i, j in tree_positions:
-                if self.rng.random() < self.f:
-                    fire_size = self.spread_fire(i, j)
-                    if fire_size > 0:
-                        self.fire_sizes.append(fire_size)
-                    break  # Only one lightning strike per step (more realistic)
+        if len(tree_positions) == 0:
+            return
 
+        for i, j in tree_positions:
+            if self.rng.random() < self.f:
+                fire_size = self.spread_fire(i, j)
+                if fire_size > 0:
+                    self.fire_sizes.append(fire_size)
+                break
+
+    def step(self):
+        """Perform one simulation step."""
+        self.timestep += 1
+        self._clear_burning_cells()
+        self._grow_trees()
+        self._try_lightning_strike()
         self.tree_counts.append(self.count_trees())
 
     def run(self, num_steps, progress_interval=1000):
@@ -160,22 +165,13 @@ class ForestFireSimulation:
         return ax
 
 
-def run_interactive_simulation():
-    """Run an animated simulation."""
-    print("Forest Fire Simulation - Interactive")
-    print("=" * 50)
-
-    sim = ForestFireSimulation(size=200, tree_growth_prob=0.02, seed=42)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-
-    # Forest visualization
+def _setup_forest_animation(sim, ax1, ax2):
+    """Set up axes for forest fire animation."""
     colors = ['#1a1a2e', '#2d5a27', '#ff4500']
     cmap = ListedColormap(colors)
     im = ax1.imshow(sim.grid, cmap=cmap, vmin=0, vmax=2)
     ax1.set_title('Forest')
 
-    # Fire distribution
     line, = ax2.loglog([], [], 'o', markersize=4, alpha=0.7, color='orangered')
     ax2.set_xlabel('Fire Size')
     ax2.set_ylabel('Frequency')
@@ -184,8 +180,12 @@ def run_interactive_simulation():
     ax2.set_ylim(1, 1000)
     ax2.grid(True, alpha=0.3)
 
+    return im, line
+
+
+def _create_forest_update(sim, im, ax1, ax2, line):
+    """Create animation update function for forest fire."""
     def update(frame):
-        # Run multiple steps per frame
         for _ in range(10):
             sim.step()
 
@@ -200,10 +200,31 @@ def run_interactive_simulation():
             ax2.set_ylim(0.8, max(max(frequencies), 10) * 2)
 
         return im, line
+    return update
 
-    ani = FuncAnimation(fig, update, frames=500, interval=50, blit=False)
+
+def run_interactive_simulation():
+    """Run an animated simulation."""
+    print("Forest Fire Simulation - Interactive")
+    print("=" * 50)
+
+    sim = ForestFireSimulation(size=200, tree_growth_prob=0.02, seed=42)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+    im, line = _setup_forest_animation(sim, ax1, ax2)
+    update = _create_forest_update(sim, im, ax1, ax2, line)
+
+    FuncAnimation(fig, update, frames=500, interval=50, blit=False)
     plt.tight_layout()
     plt.show()
+
+
+def _run_and_plot_scenario(sim, ax_state, ax_dist, label):
+    """Run a simulation scenario and plot results."""
+    sim.run(5000, progress_interval=1000)
+    sim.plot_state(ax_state)
+    ax_state.set_title(f'{label}: {len(sim.fire_sizes)} fires')
+    sim.plot_fire_distribution(ax_dist)
 
 
 def run_fire_suppression_demo():
@@ -214,23 +235,13 @@ def run_fire_suppression_demo():
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 12))
 
-    # Normal conditions
     print("\nNormal conditions (p=0.01, f=0.001)...")
     sim_normal = ForestFireSimulation(size=200, tree_growth_prob=0.01, lightning_prob=0.001, seed=42)
-    sim_normal.run(5000, progress_interval=1000)
+    _run_and_plot_scenario(sim_normal, axes[0, 0], axes[0, 1], 'Normal')
 
-    sim_normal.plot_state(axes[0, 0])
-    axes[0, 0].set_title(f'Normal: {len(sim_normal.fire_sizes)} fires')
-    sim_normal.plot_fire_distribution(axes[0, 1])
-
-    # Fire suppression (very low lightning)
     print("\nFire suppression (p=0.01, f=0.0001)...")
     sim_suppressed = ForestFireSimulation(size=200, tree_growth_prob=0.01, lightning_prob=0.0001, seed=42)
-    sim_suppressed.run(5000, progress_interval=1000)
-
-    sim_suppressed.plot_state(axes[1, 0])
-    axes[1, 0].set_title(f'Suppressed: {len(sim_suppressed.fire_sizes)} fires')
-    sim_suppressed.plot_fire_distribution(axes[1, 1])
+    _run_and_plot_scenario(sim_suppressed, axes[1, 0], axes[1, 1], 'Suppressed')
 
     plt.tight_layout()
     plt.savefig('forest_fire_suppression.png', dpi=150)
@@ -241,16 +252,8 @@ def run_fire_suppression_demo():
     print("making catastrophic mega-fires more likely when they do occur!")
 
 
-def run_quick_demo():
-    """Quick demonstration of the forest fire model."""
-    print("Forest Fire Simulation")
-    print("=" * 50)
-
-    sim = ForestFireSimulation(size=200, tree_growth_prob=0.01, seed=42)
-
-    print("Running simulation...")
-    sim.run(10000, progress_interval=2000)
-
+def _print_forest_stats(sim):
+    """Print forest fire simulation statistics."""
     print(f"\nTimesteps: {sim.timestep}")
     print(f"Tree density: {sim.tree_density():.2%}")
     print(f"Total fires: {len(sim.fire_sizes)}")
@@ -258,16 +261,25 @@ def run_quick_demo():
         print(f"Largest fire: {max(sim.fire_sizes)} trees")
         print(f"Average fire: {np.mean(sim.fire_sizes):.1f} trees")
 
-    # Plot
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
 
+def run_quick_demo():
+    """Quick demonstration of the forest fire model."""
+    print("Forest Fire Simulation")
+    print("=" * 50)
+
+    sim = ForestFireSimulation(size=200, tree_growth_prob=0.01, seed=42)
+    print("Running simulation...")
+    sim.run(10000, progress_interval=2000)
+
+    _print_forest_stats(sim)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     sim.plot_state(ax1)
     sim.plot_fire_distribution(ax2)
 
     plt.tight_layout()
     plt.savefig('forest_fire_results.png', dpi=150)
     plt.show()
-
     print("\nResults saved to forest_fire_results.png")
 
 

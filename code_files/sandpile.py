@@ -32,23 +32,33 @@ class SandpileSimulation:
         # Statistics
         self.total_grains = 0
         self.avalanche_sizes = []
-        self.current_avalanche_size = 0
+
+    def _get_drop_position(self):
+        """Get the position where the next grain will be dropped."""
+        if self.drop_mode == 'center':
+            return self.size // 2, self.size // 2
+        return self.rng.integers(0, self.size), self.rng.integers(0, self.size)
+
+    def _distribute_to_neighbors(self, topple_mask):
+        """Distribute grains from toppled cells to their neighbors."""
+        self.grid[1:, :] += topple_mask[:-1, :]   # Up
+        self.grid[:-1, :] += topple_mask[1:, :]   # Down
+        self.grid[:, 1:] += topple_mask[:, :-1]   # Left
+        self.grid[:, :-1] += topple_mask[:, 1:]   # Right
+
+    def _record_avalanche(self, size):
+        """Record an avalanche if it occurred."""
+        if size > 0:
+            self.avalanche_sizes.append(size)
 
     def drop_grain(self):
-        """Drop a single grain of sand."""
-        if self.drop_mode == 'center':
-            x, y = self.size // 2, self.size // 2
-        else:  # random
-            x = self.rng.integers(0, self.size)
-            y = self.rng.integers(0, self.size)
-
+        """Drop a single grain of sand and process any resulting avalanche."""
+        x, y = self._get_drop_position()
         self.grid[x, y] += 1
         self.total_grains += 1
 
-        # Process avalanche
         avalanche_size = self.process_avalanche()
-        if avalanche_size > 0:
-            self.avalanche_sizes.append(avalanche_size)
+        self._record_avalanche(avalanche_size)
 
         return avalanche_size
 
@@ -57,32 +67,16 @@ class SandpileSimulation:
         total_topples = 0
 
         while True:
-            # Find all cells that need to topple
             unstable = self.grid >= self.threshold
             if not np.any(unstable):
                 break
 
-            # Count topples in this round
             topple_count = np.sum(unstable)
             total_topples += topple_count
 
-            # Topple all unstable cells
             topple_mask = unstable.astype(np.int32)
-
-            # Remove 4 grains from each toppling cell
             self.grid -= self.threshold * topple_mask
-
-            # Add 1 grain to each neighbor
-            # Up
-            self.grid[1:, :] += topple_mask[:-1, :]
-            # Down
-            self.grid[:-1, :] += topple_mask[1:, :]
-            # Left
-            self.grid[:, 1:] += topple_mask[:, :-1]
-            # Right
-            self.grid[:, :-1] += topple_mask[:, 1:]
-
-            # Grains falling off the edge are lost (boundary condition)
+            self._distribute_to_neighbors(topple_mask)
 
         return total_topples
 
@@ -138,15 +132,8 @@ class SandpileSimulation:
         return ax
 
 
-def run_interactive_simulation():
-    """Run an animated simulation."""
-    # Create simulation
-    sim = SandpileSimulation(size=100, drop_mode='random', seed=42)
-
-    # Set up the figure
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-
-    # Initial plots
+def _setup_animation_axes(ax1, ax2, sim):
+    """Set up axes for animation display."""
     im = ax1.imshow(sim.grid, cmap='YlOrBr', vmin=0, vmax=sim.threshold)
     plt.colorbar(im, ax=ax1, label='Grains')
     ax1.set_title('Sandpile')
@@ -159,16 +146,18 @@ def run_interactive_simulation():
     ax2.set_ylim(1, 10000)
     ax2.grid(True, alpha=0.3)
 
+    return im, line
+
+
+def _create_update_function(sim, im, ax1, ax2, line):
+    """Create the animation update function."""
     def update(frame):
-        # Drop multiple grains per frame for faster visualization
         for _ in range(100):
             sim.drop_grain()
 
-        # Update sandpile image
         im.set_array(sim.grid)
         ax1.set_title(f'Sandpile (Grains: {sim.total_grains})')
 
-        # Update power law plot
         sizes, frequencies = sim.get_avalanche_distribution()
         if sizes:
             line.set_data(sizes, frequencies)
@@ -176,9 +165,43 @@ def run_interactive_simulation():
             ax2.set_ylim(0.8, max(frequencies) * 2)
 
         return im, line
+    return update
 
-    ani = FuncAnimation(fig, update, frames=500, interval=50, blit=False)
+
+def run_interactive_simulation():
+    """Run an animated simulation."""
+    sim = SandpileSimulation(size=100, drop_mode='random', seed=42)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+    im, line = _setup_animation_axes(ax1, ax2, sim)
+    update = _create_update_function(sim, im, ax1, ax2, line)
+
+    FuncAnimation(fig, update, frames=500, interval=50, blit=False)
     plt.tight_layout()
+    plt.show()
+
+
+def _print_simulation_stats(sim):
+    """Print simulation statistics."""
+    print(f"Total grains dropped: {sim.total_grains}")
+    print(f"Total avalanches: {len(sim.avalanche_sizes)}")
+    if sim.avalanche_sizes:
+        print(f"Largest avalanche: {max(sim.avalanche_sizes)} topples")
+        print(f"Average avalanche: {np.mean(sim.avalanche_sizes):.1f} topples")
+
+
+def _plot_demo_results(sim):
+    """Plot and save demonstration results."""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+    im = ax1.imshow(sim.grid, cmap='YlOrBr', vmin=0, vmax=sim.threshold)
+    plt.colorbar(im, ax=ax1, label='Grains')
+    ax1.set_title(f'Sandpile State ({sim.size}x{sim.size})')
+
+    sim.plot_power_law(ax2)
+
+    plt.tight_layout()
+    plt.savefig('sandpile_results.png', dpi=150)
     plt.show()
 
 
@@ -187,30 +210,11 @@ def run_quick_demo():
     print("Running Sandpile Simulation...")
     print("=" * 50)
 
-    # Run simulation
     sim = SandpileSimulation(size=100, drop_mode='random', seed=42)
     sim.run(50000)
 
-    print(f"Total grains dropped: {sim.total_grains}")
-    print(f"Total avalanches: {len(sim.avalanche_sizes)}")
-    if sim.avalanche_sizes:
-        print(f"Largest avalanche: {max(sim.avalanche_sizes)} topples")
-        print(f"Average avalanche: {np.mean(sim.avalanche_sizes):.1f} topples")
-
-    # Plot results
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-
-    # Sandpile state
-    im = ax1.imshow(sim.grid, cmap='YlOrBr', vmin=0, vmax=sim.threshold)
-    plt.colorbar(im, ax=ax1, label='Grains')
-    ax1.set_title(f'Sandpile State ({sim.size}x{sim.size})')
-
-    # Power law distribution
-    sim.plot_power_law(ax2)
-
-    plt.tight_layout()
-    plt.savefig('sandpile_results.png', dpi=150)
-    plt.show()
+    _print_simulation_stats(sim)
+    _plot_demo_results(sim)
 
     print("\nResults saved to sandpile_results.png")
 

@@ -28,10 +28,7 @@ class IsingModel:
         self.temperature = temperature
         self.rng = np.random.default_rng(seed)
 
-        # Initialize random spins (+1 or -1)
         self.grid = self.rng.choice([-1, 1], size=(size, size))
-
-        # Statistics
         self.sweeps = 0
         self.magnetization_history = []
 
@@ -39,18 +36,24 @@ class IsingModel:
         """Set temperature (in units of Tc)."""
         self.temperature = T * self.Tc
 
-    def get_energy_change(self, i, j):
-        """Calculate energy change if spin at (i,j) were flipped."""
-        spin = self.grid[i, j]
-        # Sum of neighbors (periodic boundary conditions)
-        neighbors = (
+    def _get_neighbor_sum(self, i, j):
+        """Get sum of neighboring spins with periodic boundaries."""
+        return (
             self.grid[(i + 1) % self.size, j] +
             self.grid[(i - 1) % self.size, j] +
             self.grid[i, (j + 1) % self.size] +
             self.grid[i, (j - 1) % self.size]
         )
-        # Energy change = 2 * spin * sum_of_neighbors
-        return 2 * spin * neighbors
+
+    def _should_flip(self, dE):
+        """Determine if a spin flip should be accepted."""
+        if dE <= 0:
+            return True
+        return self.rng.random() < np.exp(-dE / self.temperature)
+
+    def get_energy_change(self, i, j):
+        """Calculate energy change if spin at (i,j) were flipped."""
+        return 2 * self.grid[i, j] * self._get_neighbor_sum(i, j)
 
     def metropolis_step(self):
         """Perform one Metropolis Monte Carlo step (single spin flip attempt)."""
@@ -58,11 +61,7 @@ class IsingModel:
         j = self.rng.integers(0, self.size)
 
         dE = self.get_energy_change(i, j)
-
-        # Accept or reject the flip
-        if dE <= 0:
-            self.grid[i, j] *= -1
-        elif self.rng.random() < np.exp(-dE / self.temperature):
+        if self._should_flip(dE):
             self.grid[i, j] *= -1
 
     def sweep(self, n_sweeps=1):
@@ -76,34 +75,34 @@ class IsingModel:
         """Calculate average magnetization per spin."""
         return np.mean(self.grid)
 
+    def _bfs_domain_size(self, start_i, start_j, visited):
+        """Find domain size starting from a point using BFS."""
+        spin = self.grid[start_i, start_j]
+        size = 0
+        queue = deque([(start_i, start_j)])
+        visited[start_i, start_j] = True
+
+        while queue:
+            x, y = queue.popleft()
+            size += 1
+
+            for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                nx, ny = (x + dx) % self.size, (y + dy) % self.size
+                if not visited[nx, ny] and self.grid[nx, ny] == spin:
+                    visited[nx, ny] = True
+                    queue.append((nx, ny))
+
+        return size
+
     def find_domains(self):
-        """
-        Find all connected domains using BFS.
-        Returns list of domain sizes.
-        """
+        """Find all connected domains using BFS. Returns list of domain sizes."""
         visited = np.zeros((self.size, self.size), dtype=bool)
         domain_sizes = []
 
         for i in range(self.size):
             for j in range(self.size):
                 if not visited[i, j]:
-                    # BFS to find connected domain
-                    spin = self.grid[i, j]
-                    size = 0
-                    queue = deque([(i, j)])
-                    visited[i, j] = True
-
-                    while queue:
-                        x, y = queue.popleft()
-                        size += 1
-
-                        # Check neighbors
-                        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-                            nx, ny = (x + dx) % self.size, (y + dy) % self.size
-                            if not visited[nx, ny] and self.grid[nx, ny] == spin:
-                                visited[nx, ny] = True
-                                queue.append((nx, ny))
-
+                    size = self._bfs_domain_size(i, j, visited)
                     domain_sizes.append(size)
 
         return domain_sizes
@@ -161,48 +160,40 @@ class IsingModel:
         return ax
 
 
+def _simulate_at_temperature(T, axes_row, col_idx):
+    """Simulate and plot Ising model at a given temperature."""
+    print(f"Simulating T = {T:.3f} (T/Tc = {T/2.269:.3f})...")
+
+    model = IsingModel(size=128, temperature=T, seed=42)
+    model.sweep(100)
+
+    model.plot_state(axes_row[0][col_idx])
+    model.plot_domain_distribution(axes_row[1][col_idx], remove_percolating=(abs(T - 2.269) < 0.1))
+
+
 def run_temperature_comparison():
     """Show the system at different temperatures."""
     print("2D Ising Model - Temperature Comparison")
     print("=" * 50)
 
-    temperatures = [0.5, 1.0, 2.269, 4.0]  # T values (not T/Tc)
+    temperatures = [0.5, 1.0, 2.269, 4.0]
     fig, axes = plt.subplots(2, 4, figsize=(16, 8))
 
     for i, T in enumerate(temperatures):
-        print(f"Simulating T = {T:.3f} (T/Tc = {T/2.269:.3f})...")
-
-        model = IsingModel(size=128, temperature=T, seed=42)
-        # Equilibrate
-        model.sweep(100)
-
-        # Top row: spin configuration
-        model.plot_state(axes[0, i])
-
-        # Bottom row: domain distribution
-        model.plot_domain_distribution(axes[1, i], remove_percolating=(abs(T - 2.269) < 0.1))
+        _simulate_at_temperature(T, axes, i)
 
     plt.tight_layout()
     plt.savefig('ising_temperature_comparison.png', dpi=150)
     plt.show()
-
     print("\nResults saved to ising_temperature_comparison.png")
 
 
-def run_critical_animation():
-    """Animate the system at the critical temperature."""
-    print("Running Ising Model at Critical Temperature...")
-
-    model = IsingModel(size=128, temperature=2.269, seed=42)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-
-    # Initial spin plot
+def _setup_ising_animation(model, ax1, ax2):
+    """Set up axes for Ising animation."""
     cmap = ListedColormap(['#3498db', '#e74c3c'])
     im = ax1.imshow(model.grid, cmap=cmap, vmin=-1, vmax=1)
     ax1.set_title('Spin Configuration')
 
-    # Domain distribution plot
     line, = ax2.loglog([], [], 'o', markersize=4, alpha=0.7, color='purple')
     ax2.set_xlabel('Domain Size')
     ax2.set_ylabel('Frequency')
@@ -211,9 +202,13 @@ def run_critical_animation():
     ax2.set_ylim(1, 1000)
     ax2.grid(True, alpha=0.3)
 
+    return im, line
+
+
+def _create_ising_update(model, im, ax1, ax2, line):
+    """Create animation update function for Ising model."""
     def update(frame):
         model.sweep(5)
-
         im.set_array(model.grid)
         ax1.set_title(f'T/Tc = 1.0, Sweep {model.sweeps}')
 
@@ -224,10 +219,32 @@ def run_critical_animation():
             ax2.set_ylim(0.8, max(max(frequencies), 10) * 2)
 
         return im, line
+    return update
 
-    ani = FuncAnimation(fig, update, frames=200, interval=100, blit=False)
+
+def run_critical_animation():
+    """Animate the system at the critical temperature."""
+    print("Running Ising Model at Critical Temperature...")
+
+    model = IsingModel(size=128, temperature=2.269, seed=42)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+    im, line = _setup_ising_animation(model, ax1, ax2)
+    update = _create_ising_update(model, im, ax1, ax2, line)
+
+    FuncAnimation(fig, update, frames=200, interval=100, blit=False)
     plt.tight_layout()
     plt.show()
+
+
+def _print_ising_stats(model):
+    """Print Ising model statistics."""
+    print(f"Sweeps completed: {model.sweeps}")
+    print(f"Magnetization: {model.get_magnetization():.4f}")
+
+    domain_sizes = model.find_domains()
+    print(f"Number of domains: {len(domain_sizes)}")
+    print(f"Largest domain: {max(domain_sizes)} spins")
 
 
 def run_quick_demo():
@@ -236,27 +253,18 @@ def run_quick_demo():
     print("=" * 50)
 
     model = IsingModel(size=128, temperature=2.269, seed=42)
-
     print("Equilibrating...")
     model.sweep(200)
 
-    print(f"Sweeps completed: {model.sweeps}")
-    print(f"Magnetization: {model.get_magnetization():.4f}")
+    _print_ising_stats(model)
 
-    domain_sizes = model.find_domains()
-    print(f"Number of domains: {len(domain_sizes)}")
-    print(f"Largest domain: {max(domain_sizes)} spins")
-
-    # Plot
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-
     model.plot_state(ax1)
     model.plot_domain_distribution(ax2)
 
     plt.tight_layout()
     plt.savefig('ising_critical.png', dpi=150)
     plt.show()
-
     print("\nResults saved to ising_critical.png")
 
 
