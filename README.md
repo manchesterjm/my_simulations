@@ -1,18 +1,28 @@
-# Self-Organized Criticality Simulations
+# Physics & Probability Simulations
 
-Physics simulations demonstrating **self-organized criticality** and **power law distributions**.
+Physics simulations demonstrating **self-organized criticality**, **power law distributions**, and **Monte Carlo methods**.
 
 ## Overview
 
-This project contains three classic physics simulations that all exhibit the same universal behavior at criticality - power law distributions where small events are common and large events are rare, but not as rare as you'd expect from a normal distribution.
+This project contains simulations exploring emergent behavior in complex systems - from avalanches to epidemics to probability puzzles.
 
 ### Simulations
 
 | Simulation | Model | Key Phenomenon |
 |------------|-------|----------------|
-| **Sandpile** | Per Bak's Abelian Sandpile | Avalanche cascades |
+| **Sandpile** | Per Bak's Abelian Sandpile | Avalanche cascades, power laws |
 | **Ising Model** | 2D magnetic spins | Phase transitions at Curie temperature |
-| **Forest Fire** | Drossel-Schwabl model | Fire spread and suppression |
+| **Forest Fire** | Drossel-Schwabl model | Fire spread and self-organized criticality |
+| **Epidemic** | Agent-based SIR model | Disease spread, R0, herd immunity |
+| **Noodle Loops** | Monte Carlo simulation | Probability puzzle with exact solutions |
+| **Cache Sim** | CPU cache simulator | LRU/FIFO replacement policies |
+
+### GPU Acceleration
+
+The first three simulations support **GPU acceleration** via CuPy:
+- Ising Model: ~40x speedup with checkerboard Metropolis
+- Sandpile: ~40x speedup with batch avalanche processing
+- Forest Fire: ~1.3x speedup (limited by sequential BFS)
 
 ## Inspiration
 
@@ -20,16 +30,19 @@ This project was inspired by [Derek Muller's](https://www.veritasium.com/) (Veri
 
 ## Installation
 
-```bash
+\`\`\`bash
 git clone https://github.com/manchesterjm/my_simulations.git
 cd my_simulations
 pip install -r support_files/requirements.txt
-```
+
+# Optional: GPU support
+pip install cupy-cuda12x
+\`\`\`
 
 ## Usage
 
-```bash
-# Individual simulations
+\`\`\`bash
+# Self-Organized Criticality Simulations
 python code_files/sandpile.py              # Quick demo
 python code_files/sandpile.py --animate    # Animated visualization
 
@@ -41,38 +54,56 @@ python code_files/forest_fire.py           # Quick demo
 python code_files/forest_fire.py --animate # Animated visualization
 python code_files/forest_fire.py --suppression  # Fire suppression demo
 
-# Run all simulations together
+# Run all SOC simulations together
 python code_files/run_all.py               # Side-by-side comparison
 python code_files/run_all.py --combined    # Overlay distributions
-```
+
+# Epidemic Simulation
+python code_files/epidemic.py              # Basic SIR simulation
+python code_files/epidemic.py --compare    # Compare different infection rates
+python code_files/epidemic.py --vaccine    # Vaccination intervention demo
+
+# Monte Carlo
+python code_files/noodle_loops.py          # Noodle loop probability simulation
+python code_files/noodle_loops.py --n 10 --trials 100000
+
+# Benchmarks (GPU vs CPU)
+python code_files/benchmark.py             # Compare performance
+\`\`\`
 
 ## Testing
 
-```bash
-# Run all tests
+\`\`\`bash
+# Run all tests (78 total)
 pytest tests/ -v
 
 # Run with hypothesis statistics
 pytest tests/ --hypothesis-show-statistics
-
-# Mutation testing
-mutmut run --paths-to-mutate=code_files/
-mutmut results
-```
+\`\`\`
 
 ## Project Structure
 
-```
+\`\`\`
 /
 ├── README.md
 ├── LICENSE
 ├── CLAUDE.md              # Development guidelines
 ├── code_files/            # Simulation source code
+│   ├── sandpile.py        # Abelian sandpile (CPU + GPU)
+│   ├── ising_model.py     # Ising model (CPU + GPU)
+│   ├── forest_fire.py     # Forest fire (CPU + GPU)
+│   ├── epidemic.py        # SIR epidemic model
+│   ├── noodle_loops.py    # Monte Carlo simulation
+│   ├── cache_sim.py       # CPU cache simulator
+│   ├── run_all.py         # Combined demo
+│   ├── benchmark.py       # CPU vs GPU benchmarks
+│   ├── gpu_utils.py       # GPU detection utilities
+│   └── *_gpu.py           # GPU implementations
 ├── features/              # BDD specifications (Gherkin)
-├── tests/                 # Unit and fuzz tests
+├── tests/                 # Unit tests (78 tests)
 ├── sessions/              # Development session logs
 └── support_files/         # Config and reference materials
-```
+\`\`\`
 
 ## Development Principles
 
@@ -81,7 +112,7 @@ This project follows strict development practices:
 - **BDD First**: All features start with Gherkin specifications
 - **TDD**: Tests written before code; tests are never modified to pass
 - **SOFA**: Short, One thing, Few arguments, Abstraction consistency
-- **Comprehensive Testing**: Unit tests, fuzz tests (Hypothesis), mutation tests (mutmut)
+- **Comprehensive Testing**: Unit tests, fuzz tests (Hypothesis)
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines.
 
@@ -100,6 +131,14 @@ Mathematical relationships where frequency decreases as size increases, appearin
 - Stock market crashes
 - City populations
 - And many more natural phenomena
+
+### SIR Epidemic Model
+Agent-based disease modeling with:
+- **S**usceptible: Can be infected
+- **I**nfectious: Can spread disease
+- **R**ecovered: Immune (temporary or permanent)
+
+Key metrics: R0 (basic reproduction number), herd immunity threshold
 
 ## License
 

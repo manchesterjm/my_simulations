@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Physics simulations demonstrating **self-organized criticality** and **power law distributions**, inspired by the Veritasium video on power laws. All simulations show that different physical systems exhibit universal behavior at criticality.
+Physics simulations demonstrating **self-organized criticality**, **power law distributions**, and **Monte Carlo methods**. Inspired by the Veritasium video on power laws. All simulations show that different physical systems exhibit universal behavior at criticality.
 
 ## File Structure
 
@@ -13,16 +13,27 @@ Physics simulations demonstrating **self-organized criticality** and **power law
 ├── CLAUDE.md              # This file
 ├── .gitignore
 ├── code_files/            # Simulation source code
-│   ├── sandpile.py
-│   ├── ising_model.py
-│   ├── forest_fire.py
-│   └── run_all.py
+│   ├── sandpile.py        # Abelian sandpile (CPU + GPU backend)
+│   ├── sandpile_gpu.py    # GPU implementation
+│   ├── ising_model.py     # Ising model (CPU + GPU backend)
+│   ├── ising_gpu.py       # GPU implementation
+│   ├── forest_fire.py     # Forest fire (CPU + GPU backend)
+│   ├── forest_fire_gpu.py # GPU implementation
+│   ├── epidemic.py        # Agent-based SIR epidemic model
+│   ├── noodle_loops.py    # Monte Carlo probability simulation
+│   ├── cache_sim.py       # CPU cache simulator
+│   ├── run_all.py         # Combined SOC demo
+│   ├── benchmark.py       # CPU vs GPU performance comparison
+│   └── gpu_utils.py       # GPU detection utilities
 ├── features/              # BDD specifications (Gherkin)
 │   ├── sandpile.feature
 │   ├── ising_model.feature
 │   └── forest_fire.feature
-├── tests/                 # Test files
-│   └── test_*.py
+├── tests/                 # Test files (78 tests total)
+│   ├── test_sandpile.py
+│   ├── test_ising_model.py
+│   ├── test_forest_fire.py
+│   └── test_epidemic.py
 ├── sessions/              # Session logs (SESSION_YYYYMMDD_HHMMSS.md)
 └── support_files/         # Configuration and reference
     ├── requirements.txt
@@ -35,10 +46,13 @@ Physics simulations demonstrating **self-organized criticality** and **power law
 Install dependencies:
 ```bash
 pip install -r support_files/requirements.txt
+
+# Optional: GPU support
+pip install cupy-cuda12x
 ```
 
 ```bash
-# Individual simulations (run from code_files/)
+# Self-Organized Criticality (with GPU support)
 python code_files/sandpile.py              # Quick demo
 python code_files/sandpile.py --animate    # Animated visualization
 
@@ -50,9 +64,20 @@ python code_files/forest_fire.py           # Quick demo
 python code_files/forest_fire.py --animate # Animated visualization
 python code_files/forest_fire.py --suppression  # Fire suppression comparison
 
-# Combined comparison
+# Combined SOC comparison
 python code_files/run_all.py               # Side-by-side all three simulations
 python code_files/run_all.py --combined    # Overlay distributions on single plot
+
+# Epidemic Simulation
+python code_files/epidemic.py              # Basic SIR simulation
+python code_files/epidemic.py --compare    # Compare infection rates
+python code_files/epidemic.py --vaccine    # Vaccination demo
+
+# Monte Carlo
+python code_files/noodle_loops.py --n 7 --trials 100000
+
+# Benchmarks
+python code_files/benchmark.py             # CPU vs GPU comparison
 ```
 
 ## Architecture
@@ -62,8 +87,9 @@ Each simulation follows the same pattern:
 - **Distribution methods**: `get_*_distribution()` returns (sizes, frequencies) for power law plotting
 - **Visualization**: `plot_state()` for grid view, `plot_*_distribution()` for log-log plots
 - **Entry points**: `run_quick_demo()` for static results, `run_interactive_simulation()` for animation
+- **Backend selection**: `backend='auto'/'gpu'/'cpu'` for GPU acceleration (SOC simulations)
 
-`run_all.py` imports and orchestrates all three simulations to demonstrate universality.
+`run_all.py` imports and orchestrates all three SOC simulations to demonstrate universality.
 
 ## Key Parameters
 
@@ -72,8 +98,18 @@ Each simulation follows the same pattern:
 | Sandpile | `threshold=4`, `drop_mode='random'` or `'center'` |
 | Ising | `temperature=2.269` (Curie temperature Tc) |
 | Forest Fire | `tree_growth_prob=0.01`, `lightning_prob=p/10` |
+| Epidemic | `infection_prob=0.01`, `infectious_days=2`, `visits_per_day=3` |
 
 All simulations accept a `seed` parameter for reproducibility.
+
+## GPU Acceleration
+
+Three simulations support GPU via CuPy with automatic fallback:
+- **Ising Model**: Checkerboard Metropolis (~40x speedup)
+- **Sandpile**: Batch avalanche processing (~40x speedup)
+- **Forest Fire**: Hybrid CPU/GPU (~1.3x speedup, BFS limited)
+
+Use `backend='auto'` (default) for automatic GPU detection, or force with `backend='gpu'`/`backend='cpu'`.
 
 ## Development Principles
 
@@ -110,8 +146,8 @@ When a test fails, fix it immediately. Do not report a failure and move on—dia
 ### Testing Requirements
 
 ```bash
-# Unit tests
-pytest tests/ -v -p no:mutagen
+# Unit tests (78 tests)
+pytest tests/ -v
 ```
 
 All code must pass unit tests (standard pytest assertions).
