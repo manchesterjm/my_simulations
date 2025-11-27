@@ -18,6 +18,56 @@ EMPTY = 0
 TREE = 1
 BURNING = 2
 
+# Check GPU availability
+try:
+    from gpu_utils import cuda_available
+    GPU_AVAILABLE = cuda_available()
+except ImportError:
+    GPU_AVAILABLE = False
+
+
+def create_forest_fire(size=256, tree_growth_prob=0.01, lightning_prob=None,
+                       seed=None, backend='auto'):
+    """
+    Factory function to create a Forest Fire simulation with the specified backend.
+
+    Args:
+        size: Grid size (size x size)
+        tree_growth_prob: Probability p that an empty cell grows a tree
+        lightning_prob: Probability f of lightning strike (default: p/10)
+        seed: Random seed for reproducibility
+        backend: 'auto', 'gpu', or 'cpu'
+            - 'auto': Use GPU if available, else CPU
+            - 'gpu': Force GPU (raises error if unavailable)
+            - 'cpu': Force CPU
+
+    Note: GPU provides limited speedup (~1.2-1.4x) for this simulation due to
+    the inherently sequential BFS fire spread algorithm.
+
+    Returns:
+        ForestFireSimulation (CPU) or ForestFireGPU instance
+    """
+    use_gpu = False
+    if backend == 'auto':
+        use_gpu = GPU_AVAILABLE
+    elif backend == 'gpu':
+        if not GPU_AVAILABLE:
+            raise RuntimeError("GPU backend requested but CUDA is not available")
+        use_gpu = True
+    elif backend == 'cpu':
+        use_gpu = False
+    else:
+        raise ValueError(f"Unknown backend: {backend}. Use 'auto', 'gpu', or 'cpu'")
+
+    if use_gpu:
+        from forest_fire_gpu import ForestFireGPU
+        return ForestFireGPU(size=size, tree_growth_prob=tree_growth_prob,
+                             lightning_prob=lightning_prob, seed=seed)
+    else:
+        return ForestFireSimulation(size=size, tree_growth_prob=tree_growth_prob,
+                                     lightning_prob=lightning_prob, seed=seed)
+
+
 class ForestFireSimulation:
     def __init__(self, size=256, tree_growth_prob=0.01, lightning_prob=None, seed=None):
         """

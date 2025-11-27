@@ -12,6 +12,52 @@ from matplotlib.colors import ListedColormap
 from matplotlib.animation import FuncAnimation
 from collections import defaultdict
 
+# Check GPU availability
+try:
+    from gpu_utils import cuda_available
+    GPU_AVAILABLE = cuda_available()
+except ImportError:
+    GPU_AVAILABLE = False
+
+
+def create_sandpile(size=50, threshold=4, drop_mode='random', seed=None, backend='auto'):
+    """
+    Factory function to create a Sandpile simulation with the specified backend.
+
+    Args:
+        size: Grid size (size x size)
+        threshold: Number of grains that triggers toppling (default 4)
+        drop_mode: 'center' or 'random' drop location
+        seed: Random seed for reproducibility
+        backend: 'auto', 'gpu', or 'cpu'
+            - 'auto': Use GPU if available, else CPU
+            - 'gpu': Force GPU (raises error if unavailable)
+            - 'cpu': Force CPU
+
+    Returns:
+        SandpileSimulation (CPU) or SandpileSimulationGPU instance
+    """
+    use_gpu = False
+    if backend == 'auto':
+        use_gpu = GPU_AVAILABLE
+    elif backend == 'gpu':
+        if not GPU_AVAILABLE:
+            raise RuntimeError("GPU backend requested but CUDA is not available")
+        use_gpu = True
+    elif backend == 'cpu':
+        use_gpu = False
+    else:
+        raise ValueError(f"Unknown backend: {backend}. Use 'auto', 'gpu', or 'cpu'")
+
+    if use_gpu:
+        from sandpile_gpu import SandpileSimulationGPU
+        return SandpileSimulationGPU(size=size, threshold=threshold,
+                                      drop_mode=drop_mode, seed=seed)
+    else:
+        return SandpileSimulation(size=size, threshold=threshold,
+                                   drop_mode=drop_mode, seed=seed)
+
+
 class SandpileSimulation:
     def __init__(self, size=50, threshold=4, drop_mode='random', seed=None):
         """

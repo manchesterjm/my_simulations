@@ -1,5 +1,7 @@
 numpy
 matplotlib
 pytest
-hypothesis
-mutmut
+
+# GPU acceleration (optional - install manually with correct CUDA version)
+# cupy-cuda12x
+# numba

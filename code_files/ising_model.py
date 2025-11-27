@@ -13,6 +13,49 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import ListedColormap
 from collections import deque, defaultdict
 
+# Check GPU availability
+try:
+    from gpu_utils import cuda_available
+    GPU_AVAILABLE = cuda_available()
+except ImportError:
+    GPU_AVAILABLE = False
+
+
+def create_ising_model(size=128, temperature=2.269, seed=None, backend='auto'):
+    """
+    Factory function to create an Ising Model with the specified backend.
+
+    Args:
+        size: Grid size (size x size)
+        temperature: Temperature relative to critical temp (Tc ≈ 2.269)
+        seed: Random seed for reproducibility
+        backend: 'auto', 'gpu', or 'cpu'
+            - 'auto': Use GPU if available, else CPU
+            - 'gpu': Force GPU (raises error if unavailable)
+            - 'cpu': Force CPU
+
+    Returns:
+        IsingModel (CPU) or IsingModelGPU instance
+    """
+    use_gpu = False
+    if backend == 'auto':
+        use_gpu = GPU_AVAILABLE
+    elif backend == 'gpu':
+        if not GPU_AVAILABLE:
+            raise RuntimeError("GPU backend requested but CUDA is not available")
+        use_gpu = True
+    elif backend == 'cpu':
+        use_gpu = False
+    else:
+        raise ValueError(f"Unknown backend: {backend}. Use 'auto', 'gpu', or 'cpu'")
+
+    if use_gpu:
+        from ising_gpu import IsingModelGPU
+        return IsingModelGPU(size=size, temperature=temperature, seed=seed)
+    else:
+        return IsingModel(size=size, temperature=temperature, seed=seed)
+
+
 class IsingModel:
     def __init__(self, size=128, temperature=2.269, seed=None):
         """
