@@ -21,6 +21,7 @@ Physics simulations demonstrating **self-organized criticality**, **power law di
 │   ├── forest_fire_gpu.py # GPU implementation
 │   ├── epidemic.py        # Agent-based SIR epidemic model
 │   ├── gravity.py         # N-body gravity simulator
+│   ├── ant_colony.py      # Ant Colony Optimization
 │   ├── noodle_loops.py    # Monte Carlo probability simulation
 │   ├── cache_sim.py       # CPU cache simulator
 │   ├── run_all.py         # Combined SOC demo
@@ -30,13 +31,15 @@ Physics simulations demonstrating **self-organized criticality**, **power law di
 │   ├── sandpile.feature
 │   ├── ising_model.feature
 │   ├── forest_fire.feature
-│   └── gravity.feature
-├── tests/                 # Test files (105 tests total)
+│   ├── gravity.feature
+│   └── ant_colony.feature
+├── tests/                 # Test files (138 tests total)
 │   ├── test_sandpile.py
 │   ├── test_ising_model.py
 │   ├── test_forest_fire.py
 │   ├── test_epidemic.py
-│   └── test_gravity.py
+│   ├── test_gravity.py
+│   └── test_ant_colony.py
 ├── sessions/              # Session logs (SESSION_YYYYMMDD_HHMMSS.md)
 └── support_files/         # Configuration and reference
     ├── requirements.txt
@@ -82,6 +85,12 @@ python code_files/gravity.py --animate    # Animated with random planets
 python code_files/gravity.py --collision  # Collision demo
 python code_files/gravity.py --ejection   # Ejection demo
 
+# Ant Colony Optimization
+python code_files/ant_colony.py           # Quick demo with 30 nodes
+python code_files/ant_colony.py --animate # Animated visualization
+python code_files/ant_colony.py --compare # Compare parameter settings
+# Or open ant_colony.html in browser for interactive web version
+
 # Monte Carlo
 python code_files/noodle_loops.py --n 7 --trials 100000
 
@@ -109,6 +118,7 @@ Each simulation follows the same pattern:
 | Forest Fire | `tree_growth_prob=0.01`, `lightning_prob=p/10` |
 | Epidemic | `infection_prob=0.01`, `infectious_days=2`, `visits_per_day=3` |
 | Gravity | `star_mass`, `n_planets`, `dt=3600` (timestep) |
+| Ant Colony | `alpha=2`, `beta=2`, `rho=0.1`, `n_ants=500` |
 
 All simulations accept a `seed` parameter for reproducibility.
 

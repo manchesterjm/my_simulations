@@ -1,0 +1,1029 @@
+<!--
+===============================================================================
+                    ANT COLONY OPTIMIZATION SIMULATOR
+===============================================================================
+
+DESCRIPTION:
+This is an interactive visualization of the Ant Colony Optimization (ACO)
+algorithm for finding shortest paths in a graph. Watch as virtual ants
+collectively discover optimal paths through pheromone-based communication.
+
+ALGORITHM:
+  1. Generate a random connected graph (road network)
+  2. Ants traverse from source to destination
+  3. Path selection: P(edge) = (pheromone^alpha) * (1/distance)^beta
+  4. Pheromone deposit: stronger on shorter paths
+  5. Evaporation: prevents convergence to suboptimal solutions
+  6. Repeat until convergence
+
+VISUALIZATION:
+  - Nodes displayed as circles
+  - Edge thickness represents pheromone level
+  - Green node: source, Red node: destination
+  - Best path highlighted in red
+  - Real-time convergence chart
+
+INTERACTIVITY:
+  - Adjust number of ants, alpha, beta, evaporation rate
+  - Start/pause simulation
+  - Reset with new random graph
+  - Compare with Dijkstra's optimal path
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ant Colony Optimization Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #ff6b35;
+            text-shadow: 0 0 20px rgba(255, 107, 53, 0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+
+        .simulation-area {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 107, 53, 0.2);
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            border-radius: 10px;
+            background: #0a0a1a;
+        }
+
+        .chart-container {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 107, 53, 0.2);
+        }
+
+        .controls {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 107, 53, 0.2);
+        }
+
+        .control-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .control-section h3 {
+            color: #ff6b35;
+            margin-bottom: 12px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        label {
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        input[type="range"] {
+            width: 120px;
+            accent-color: #ff6b35;
+        }
+
+        input[type="number"] {
+            width: 80px;
+            padding: 5px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            text-align: center;
+        }
+
+        .value-display {
+            font-family: monospace;
+            color: #ff6b35;
+            min-width: 50px;
+            text-align: right;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            color: #000;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(255, 107, 53, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .stats {
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .stats-label {
+            color: #888;
+        }
+
+        .stats-value {
+            color: #4CAF50;
+        }
+
+        .stats-value.optimal {
+            color: #ff6b35;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .info-box {
+            background: rgba(255, 107, 53, 0.1);
+            border: 1px solid rgba(255, 107, 53, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 11px;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 900px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Ant Colony Optimization</h1>
+        <p class="subtitle">Watch ants discover the shortest path through pheromone trails!</p>
+
+        <div class="main-content">
+            <div class="simulation-area">
+                <div class="canvas-container">
+                    <canvas id="graphCanvas" width="700" height="500"></canvas>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background: #4CAF50;"></div>
+                            <span>Source</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background: #f44336;"></div>
+                            <span>Destination</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background: #ff6b35;"></div>
+                            <span>Best Path</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chartCanvas" width="700" height="200"></canvas>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="control-section">
+                    <h3>Simulation Controls</h3>
+                    <button id="startStop" class="btn-primary">Start</button>
+                    <button id="reset" class="btn-secondary">New Graph</button>
+                    <button id="showDijkstra" class="btn-secondary">Show Optimal Path</button>
+                </div>
+
+                <div class="control-section">
+                    <h3>Graph Settings</h3>
+                    <div class="control-row">
+                        <label>Nodes:</label>
+                        <input type="number" id="numNodes" value="30" min="10" max="50">
+                    </div>
+                    <div class="control-row">
+                        <label>Source:</label>
+                        <input type="number" id="sourceNode" value="0" min="0" max="29">
+                    </div>
+                    <div class="control-row">
+                        <label>Destination:</label>
+                        <input type="number" id="destNode" value="29" min="0" max="29">
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>ACO Parameters</h3>
+                    <div class="control-row">
+                        <label>Ants/Iteration:</label>
+                        <input type="range" id="numAnts" min="10" max="200" value="50">
+                        <span class="value-display" id="numAntsValue">50</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Alpha (pheromone):</label>
+                        <input type="range" id="alpha" min="0.5" max="5" step="0.5" value="2">
+                        <span class="value-display" id="alphaValue">2.0</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Beta (distance):</label>
+                        <input type="range" id="beta" min="0.5" max="5" step="0.5" value="2">
+                        <span class="value-display" id="betaValue">2.0</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Evaporation (rho):</label>
+                        <input type="range" id="rho" min="0.01" max="0.5" step="0.01" value="0.1">
+                        <span class="value-display" id="rhoValue">0.10</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Speed:</label>
+                        <input type="range" id="speed" min="1" max="20" value="5">
+                        <span class="value-display" id="speedValue">5x</span>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>Statistics</h3>
+                    <div class="stats">
+                        <div class="stats-row">
+                            <span class="stats-label">Iteration:</span>
+                            <span class="stats-value" id="iteration">0</span>
+                        </div>
+                        <div class="stats-row">
+                            <span class="stats-label">Total Ants:</span>
+                            <span class="stats-value" id="totalAnts">0</span>
+                        </div>
+                        <div class="stats-row">
+                            <span class="stats-label">Best Cost:</span>
+                            <span class="stats-value" id="bestCost">-</span>
+                        </div>
+                        <div class="stats-row">
+                            <span class="stats-label">Optimal Cost:</span>
+                            <span class="stats-value optimal" id="optimalCost">-</span>
+                        </div>
+                        <div class="stats-row">
+                            <span class="stats-label">Gap:</span>
+                            <span class="stats-value" id="gap">-</span>
+                        </div>
+                        <div class="stats-row">
+                            <span class="stats-label">Unique Paths:</span>
+                            <span class="stats-value" id="uniquePaths">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h3>How It Works</h3>
+                    <div class="info-box">
+                        <strong>Ant Colony Optimization</strong> mimics how real ants find food:<br><br>
+                        1. Ants explore paths randomly<br>
+                        2. Shorter paths get more pheromone<br>
+                        3. Future ants follow stronger trails<br>
+                        4. Pheromone evaporates over time<br>
+                        5. Colony converges to optimal path
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== CANVAS AND STATE =====
+        let graphCanvas, graphCtx, chartCanvas, chartCtx;
+        let running = false;
+        let animationId = null;
+
+        // ===== GRAPH STATE =====
+        let nodes = [];
+        let edges = [];
+        let adjacency = {};
+        let pheromones = {};
+        let positions = {};
+
+        // ===== ACO STATE =====
+        let source = 0;
+        let destination = 29;
+        let bestPath = null;
+        let bestCost = Infinity;
+        let optimalPath = null;
+        let optimalCost = Infinity;
+        let showOptimal = false;
+        let iteration = 0;
+        let totalAnts = 0;
+        let costHistory = [];
+        let meanCostHistory = [];
+        let pathCounts = {};
+
+        // ===== PARAMETERS =====
+        let numNodes = 30;
+        let numAnts = 50;
+        let alpha = 2.0;
+        let beta = 2.0;
+        let rho = 0.1;
+        let Q = 1.0;
+        let speed = 5;
+
+        // ===== INITIALIZATION =====
+        function init() {
+            graphCanvas = document.getElementById('graphCanvas');
+            graphCtx = graphCanvas.getContext('2d');
+            chartCanvas = document.getElementById('chartCanvas');
+            chartCtx = chartCanvas.getContext('2d');
+
+            // Event listeners
+            document.getElementById('startStop').addEventListener('click', toggleSimulation);
+            document.getElementById('reset').addEventListener('click', resetSimulation);
+            document.getElementById('showDijkstra').addEventListener('click', toggleOptimal);
+
+            document.getElementById('numNodes').addEventListener('change', (e) => {
+                numNodes = parseInt(e.target.value);
+                document.getElementById('sourceNode').max = numNodes - 1;
+                document.getElementById('destNode').max = numNodes - 1;
+            });
+
+            document.getElementById('sourceNode').addEventListener('change', (e) => {
+                source = parseInt(e.target.value);
+                resetACO();
+            });
+
+            document.getElementById('destNode').addEventListener('change', (e) => {
+                destination = parseInt(e.target.value);
+                resetACO();
+            });
+
+            document.getElementById('numAnts').addEventListener('input', (e) => {
+                numAnts = parseInt(e.target.value);
+                document.getElementById('numAntsValue').textContent = numAnts;
+            });
+
+            document.getElementById('alpha').addEventListener('input', (e) => {
+                alpha = parseFloat(e.target.value);
+                document.getElementById('alphaValue').textContent = alpha.toFixed(1);
+            });
+
+            document.getElementById('beta').addEventListener('input', (e) => {
+                beta = parseFloat(e.target.value);
+                document.getElementById('betaValue').textContent = beta.toFixed(1);
+            });
+
+            document.getElementById('rho').addEventListener('input', (e) => {
+                rho = parseFloat(e.target.value);
+                document.getElementById('rhoValue').textContent = rho.toFixed(2);
+            });
+
+            document.getElementById('speed').addEventListener('input', (e) => {
+                speed = parseInt(e.target.value);
+                document.getElementById('speedValue').textContent = speed + 'x';
+            });
+
+            resetSimulation();
+            draw();
+        }
+
+        // ===== GRAPH GENERATION =====
+        function generateGraph() {
+            nodes = [];
+            edges = [];
+            adjacency = {};
+            positions = {};
+            pheromones = {};
+
+            // Generate node positions in a circular/random pattern
+            for (let i = 0; i < numNodes; i++) {
+                const angle = (2 * Math.PI * i) / numNodes;
+                const radius = 0.3 + 0.15 * Math.random();
+                const x = 0.5 + radius * Math.cos(angle) + 0.05 * (Math.random() - 0.5);
+                const y = 0.5 + radius * Math.sin(angle) + 0.05 * (Math.random() - 0.5);
+                positions[i] = { x, y };
+                nodes.push(i);
+                adjacency[i] = [];
+            }
+
+            // Create minimum spanning tree for connectivity
+            const connected = new Set([0]);
+            const unconnected = new Set(nodes.slice(1));
+
+            while (unconnected.size > 0) {
+                let bestDist = Infinity;
+                let bestPair = null;
+
+                for (const c of connected) {
+                    for (const u of unconnected) {
+                        const dist = distance(c, u);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            bestPair = [c, u];
+                        }
+                    }
+                }
+
+                if (bestPair) {
+                    const [c, u] = bestPair;
+                    const cost = 1 + Math.random() * 9;
+                    addEdge(c, u, cost);
+                    connected.add(u);
+                    unconnected.delete(u);
+                }
+            }
+
+            // Add extra edges for multiple paths
+            const targetEdges = numNodes * 2;
+            let attempts = 0;
+
+            while (edges.length < targetEdges && attempts < 1000) {
+                const u = Math.floor(Math.random() * numNodes);
+                const v = Math.floor(Math.random() * numNodes);
+
+                if (u !== v && !hasEdge(u, v)) {
+                    const dist = distance(u, v);
+                    if (dist < 0.4 || Math.random() < 0.2) {
+                        const cost = 1 + Math.random() * 9;
+                        addEdge(u, v, cost);
+                    }
+                }
+                attempts++;
+            }
+
+            // Initialize pheromones
+            for (const edge of edges) {
+                const key = edgeKey(edge.u, edge.v);
+                pheromones[key] = 1.0;
+            }
+        }
+
+        function distance(u, v) {
+            const dx = positions[v].x - positions[u].x;
+            const dy = positions[v].y - positions[u].y;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function addEdge(u, v, cost) {
+            edges.push({ u: Math.min(u, v), v: Math.max(u, v), cost: Math.round(cost * 100) / 100 });
+            adjacency[u].push(v);
+            adjacency[v].push(u);
+        }
+
+        function hasEdge(u, v) {
+            const key = edgeKey(u, v);
+            return edges.some(e => edgeKey(e.u, e.v) === key);
+        }
+
+        function edgeKey(u, v) {
+            return `${Math.min(u, v)}-${Math.max(u, v)}`;
+        }
+
+        function getEdgeCost(u, v) {
+            const key = edgeKey(u, v);
+            const edge = edges.find(e => edgeKey(e.u, e.v) === key);
+            return edge ? edge.cost : Infinity;
+        }
+
+        // ===== DIJKSTRA'S ALGORITHM =====
+        function dijkstra() {
+            const dist = {};
+            const prev = {};
+            const visited = new Set();
+
+            for (let i = 0; i < numNodes; i++) {
+                dist[i] = Infinity;
+                prev[i] = null;
+            }
+            dist[source] = 0;
+
+            while (visited.size < numNodes) {
+                // Find unvisited node with minimum distance
+                let minDist = Infinity;
+                let minNode = -1;
+                for (let i = 0; i < numNodes; i++) {
+                    if (!visited.has(i) && dist[i] < minDist) {
+                        minDist = dist[i];
+                        minNode = i;
+                    }
+                }
+
+                if (minNode === -1) break;
+                visited.add(minNode);
+
+                // Update neighbors
+                for (const neighbor of adjacency[minNode]) {
+                    if (visited.has(neighbor)) continue;
+                    const cost = getEdgeCost(minNode, neighbor);
+                    const newDist = dist[minNode] + cost;
+                    if (newDist < dist[neighbor]) {
+                        dist[neighbor] = newDist;
+                        prev[neighbor] = minNode;
+                    }
+                }
+            }
+
+            // Reconstruct path
+            const path = [];
+            let node = destination;
+            while (node !== null) {
+                path.unshift(node);
+                node = prev[node];
+            }
+
+            optimalPath = path;
+            optimalCost = dist[destination];
+            document.getElementById('optimalCost').textContent = optimalCost.toFixed(2);
+        }
+
+        // ===== ANT CLASS =====
+        class Ant {
+            constructor() {
+                this.currentNode = source;
+                this.path = [source];
+                this.visited = new Set([source]);
+                this.pathCost = 0;
+                this.reachedDestination = false;
+            }
+
+            calculateProbabilities() {
+                const neighbors = adjacency[this.currentNode].filter(n => !this.visited.has(n));
+                if (neighbors.length === 0) return {};
+
+                const attractiveness = {};
+                let total = 0;
+
+                for (const neighbor of neighbors) {
+                    const key = edgeKey(this.currentNode, neighbor);
+                    const pheromone = pheromones[key] || 1.0;
+                    const cost = getEdgeCost(this.currentNode, neighbor);
+                    const attr = Math.pow(pheromone, alpha) * Math.pow(1 / cost, beta);
+                    attractiveness[neighbor] = attr;
+                    total += attr;
+                }
+
+                const probs = {};
+                for (const neighbor in attractiveness) {
+                    probs[neighbor] = attractiveness[neighbor] / total;
+                }
+                return probs;
+            }
+
+            move() {
+                const probs = this.calculateProbabilities();
+                const neighbors = Object.keys(probs).map(Number);
+
+                if (neighbors.length === 0) return false;
+
+                // Roulette wheel selection
+                const r = Math.random();
+                let cumulative = 0;
+                let nextNode = neighbors[0];
+
+                for (const neighbor of neighbors) {
+                    cumulative += probs[neighbor];
+                    if (r <= cumulative) {
+                        nextNode = neighbor;
+                        break;
+                    }
+                }
+
+                const cost = getEdgeCost(this.currentNode, nextNode);
+                this.pathCost += cost;
+                this.path.push(nextNode);
+                this.visited.add(nextNode);
+                this.currentNode = nextNode;
+
+                return true;
+            }
+
+            traverse() {
+                while (this.currentNode !== destination) {
+                    if (!this.move()) return false;
+                }
+                this.reachedDestination = true;
+                return true;
+            }
+        }
+
+        // ===== ACO ITERATION =====
+        function runIteration() {
+            const results = [];
+
+            for (let i = 0; i < numAnts; i++) {
+                const ant = new Ant();
+                if (ant.traverse()) {
+                    results.push({ path: ant.path, cost: ant.pathCost });
+
+                    // Track path
+                    const pathKey = ant.path.join('-');
+                    pathCounts[pathKey] = (pathCounts[pathKey] || 0) + 1;
+                }
+            }
+
+            if (results.length > 0) {
+                // Find best in iteration
+                const costs = results.map(r => r.cost);
+                const minIdx = costs.indexOf(Math.min(...costs));
+                const iterBest = results[minIdx];
+
+                if (iterBest.cost < bestCost) {
+                    bestCost = iterBest.cost;
+                    bestPath = iterBest.path;
+                }
+
+                // Track history
+                costHistory.push(bestCost);
+                meanCostHistory.push(costs.reduce((a, b) => a + b) / costs.length);
+
+                // Deposit pheromones
+                for (const result of results) {
+                    const deposit = Q / result.cost;
+                    for (let i = 0; i < result.path.length - 1; i++) {
+                        const key = edgeKey(result.path[i], result.path[i + 1]);
+                        pheromones[key] = (pheromones[key] || 0) + deposit;
+                    }
+                }
+            }
+
+            // Evaporate
+            for (const key in pheromones) {
+                pheromones[key] *= (1 - rho);
+                pheromones[key] = Math.max(pheromones[key], 0.001);
+            }
+
+            iteration++;
+            totalAnts += numAnts;
+            updateStats();
+        }
+
+        // ===== SIMULATION CONTROL =====
+        function toggleSimulation() {
+            running = !running;
+            document.getElementById('startStop').textContent = running ? 'Pause' : 'Start';
+            if (running) {
+                animate();
+            }
+        }
+
+        function resetSimulation() {
+            running = false;
+            document.getElementById('startStop').textContent = 'Start';
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+
+            numNodes = parseInt(document.getElementById('numNodes').value);
+            source = parseInt(document.getElementById('sourceNode').value);
+            destination = parseInt(document.getElementById('destNode').value);
+
+            generateGraph();
+            dijkstra();
+            resetACO();
+            draw();
+        }
+
+        function resetACO() {
+            bestPath = null;
+            bestCost = Infinity;
+            showOptimal = false;
+            iteration = 0;
+            totalAnts = 0;
+            costHistory = [];
+            meanCostHistory = [];
+            pathCounts = {};
+
+            // Reinitialize pheromones
+            for (const edge of edges) {
+                const key = edgeKey(edge.u, edge.v);
+                pheromones[key] = 1.0;
+            }
+
+            dijkstra();
+            updateStats();
+            draw();
+        }
+
+        function toggleOptimal() {
+            showOptimal = !showOptimal;
+            draw();
+        }
+
+        function updateStats() {
+            document.getElementById('iteration').textContent = iteration;
+            document.getElementById('totalAnts').textContent = totalAnts;
+            document.getElementById('bestCost').textContent = bestCost === Infinity ? '-' : bestCost.toFixed(2);
+            document.getElementById('uniquePaths').textContent = Object.keys(pathCounts).length;
+
+            if (optimalCost !== Infinity && bestCost !== Infinity) {
+                const gap = ((bestCost - optimalCost) / optimalCost * 100).toFixed(1);
+                document.getElementById('gap').textContent = gap + '%';
+            }
+        }
+
+        // ===== DRAWING =====
+        function draw() {
+            drawGraph();
+            drawChart();
+        }
+
+        function drawGraph() {
+            const ctx = graphCtx;
+            const width = graphCanvas.width;
+            const height = graphCanvas.height;
+            const padding = 50;
+
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, width, height);
+
+            // Find max pheromone for normalization
+            const maxPheromone = Math.max(...Object.values(pheromones), 1);
+
+            // Draw edges
+            for (const edge of edges) {
+                const p1 = positions[edge.u];
+                const p2 = positions[edge.v];
+                const x1 = padding + p1.x * (width - 2 * padding);
+                const y1 = padding + p1.y * (height - 2 * padding);
+                const x2 = padding + p2.x * (width - 2 * padding);
+                const y2 = padding + p2.y * (height - 2 * padding);
+
+                const key = edgeKey(edge.u, edge.v);
+                const pheromone = pheromones[key] || 0;
+                const intensity = pheromone / maxPheromone;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.strokeStyle = `rgba(100, 150, 200, ${0.2 + 0.6 * intensity})`;
+                ctx.lineWidth = 1 + 4 * intensity;
+                ctx.stroke();
+            }
+
+            // Draw optimal path if showing
+            if (showOptimal && optimalPath && optimalPath.length > 1) {
+                ctx.beginPath();
+                for (let i = 0; i < optimalPath.length; i++) {
+                    const p = positions[optimalPath[i]];
+                    const x = padding + p.x * (width - 2 * padding);
+                    const y = padding + p.y * (height - 2 * padding);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.strokeStyle = '#4CAF50';
+                ctx.lineWidth = 4;
+                ctx.setLineDash([10, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Draw best path
+            if (bestPath && bestPath.length > 1) {
+                ctx.beginPath();
+                for (let i = 0; i < bestPath.length; i++) {
+                    const p = positions[bestPath[i]];
+                    const x = padding + p.x * (width - 2 * padding);
+                    const y = padding + p.y * (height - 2 * padding);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.strokeStyle = '#ff6b35';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
+
+            // Draw nodes
+            for (let i = 0; i < numNodes; i++) {
+                const p = positions[i];
+                const x = padding + p.x * (width - 2 * padding);
+                const y = padding + p.y * (height - 2 * padding);
+
+                let color = '#3498db';
+                let radius = 12;
+
+                if (i === source) {
+                    color = '#4CAF50';
+                    radius = 16;
+                } else if (i === destination) {
+                    color = '#f44336';
+                    radius = 16;
+                }
+
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(i.toString(), x, y);
+            }
+        }
+
+        function drawChart() {
+            const ctx = chartCtx;
+            const width = chartCanvas.width;
+            const height = chartCanvas.height;
+            const padding = 50;
+
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, width, height);
+
+            if (costHistory.length < 2) {
+                ctx.fillStyle = '#666';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Start simulation to see convergence chart', width / 2, height / 2);
+                return;
+            }
+
+            const chartWidth = width - 2 * padding;
+            const chartHeight = height - 2 * padding;
+
+            // Find data range
+            const allCosts = [...costHistory, ...meanCostHistory];
+            if (optimalCost !== Infinity) allCosts.push(optimalCost);
+            const minCost = Math.min(...allCosts) * 0.9;
+            const maxCost = Math.max(...allCosts) * 1.1;
+
+            // Draw axes
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, height - padding);
+            ctx.lineTo(width - padding, height - padding);
+            ctx.stroke();
+
+            // Draw optimal line
+            if (optimalCost !== Infinity) {
+                const y = height - padding - ((optimalCost - minCost) / (maxCost - minCost)) * chartHeight;
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(width - padding, y);
+                ctx.strokeStyle = '#ff6b35';
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.fillStyle = '#ff6b35';
+                ctx.font = '10px Arial';
+                ctx.fillText('Optimal', width - padding - 30, y - 5);
+            }
+
+            // Draw mean cost line
+            ctx.beginPath();
+            for (let i = 0; i < meanCostHistory.length; i++) {
+                const x = padding + (i / (meanCostHistory.length - 1)) * chartWidth;
+                const y = height - padding - ((meanCostHistory[i] - minCost) / (maxCost - minCost)) * chartHeight;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = 'rgba(76, 175, 80, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw best cost line
+            ctx.beginPath();
+            for (let i = 0; i < costHistory.length; i++) {
+                const x = padding + (i / (costHistory.length - 1)) * chartWidth;
+                const y = height - padding - ((costHistory[i] - minCost) / (maxCost - minCost)) * chartHeight;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = '#3498db';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Labels
+            ctx.fillStyle = '#888';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Iteration', width / 2, height - 10);
+
+            ctx.save();
+            ctx.translate(15, height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('Cost', 0, 0);
+            ctx.restore();
+
+            // Legend
+            ctx.fillStyle = '#3498db';
+            ctx.fillRect(width - 120, 20, 15, 10);
+            ctx.fillStyle = '#888';
+            ctx.textAlign = 'left';
+            ctx.fillText('Best', width - 100, 28);
+
+            ctx.fillStyle = 'rgba(76, 175, 80, 0.5)';
+            ctx.fillRect(width - 120, 35, 15, 10);
+            ctx.fillStyle = '#888';
+            ctx.fillText('Mean', width - 100, 43);
+        }
+
+        // ===== ANIMATION LOOP =====
+        function animate() {
+            if (!running) return;
+
+            for (let i = 0; i < speed; i++) {
+                runIteration();
+            }
+
+            draw();
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // ===== START =====
+        init();
+    </script>
+</body>
+</html>
