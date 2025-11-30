@@ -439,15 +439,21 @@ INTERACTIVITY:
                 document.getElementById('destNode').max = numNodes - 1;
             });
 
-            document.getElementById('sourceNode').addEventListener('change', (e) => {
-                source = Math.min(parseInt(e.target.value), numNodes - 1);
+            document.getElementById('sourceNode').addEventListener('input', (e) => {
+                let newSource = parseInt(e.target.value) || 0;
+                newSource = Math.max(0, Math.min(newSource, numNodes - 1));
+                source = newSource;
                 e.target.value = source;
+                dijkstra();  // Recalculate optimal path
                 resetACO();
             });
 
-            document.getElementById('destNode').addEventListener('change', (e) => {
-                destination = Math.min(parseInt(e.target.value), numNodes - 1);
+            document.getElementById('destNode').addEventListener('input', (e) => {
+                let newDest = parseInt(e.target.value) || 0;
+                newDest = Math.max(0, Math.min(newDest, numNodes - 1));
+                destination = newDest;
                 e.target.value = destination;
+                dijkstra();  // Recalculate optimal path
                 resetACO();
             });
 
@@ -885,7 +891,6 @@ INTERACTIVITY:
                 pheromones[key] = 1.0;
             }
 
-            dijkstra();
             updateStats();
             draw();
         }
