@@ -1,14 +1,35 @@
-"""
-GPU-Accelerated Forest Fire Simulation
-Uses CuPy for GPU array operations with hybrid CPU/GPU approach.
+"""GPU-Accelerated Forest Fire Simulation with Hybrid Approach.
 
-GPU handles: tree growth, clearing burning cells, random generation
-CPU handles: BFS fire spread (inherently sequential)
+This module implements the Drossel-Schwabl forest fire model using a hybrid
+CPU/GPU approach. Tree growth and cell clearing run on GPU, while fire spread
+uses CPU-based BFS (breadth-first search).
 
-NOTE: The Forest Fire model shows LIMITED GPU speedup (~1.1x at 400x400)
-because BFS fire spread is inherently sequential and requires GPU-CPU
-data transfers. For most use cases, the CPU version may be comparable.
-GPU becomes beneficial only at very large grid sizes (500x500+).
+Physics:
+    Trees grow randomly on empty cells with probability p. Lightning strikes
+    with probability f (typically f = p/10), igniting fires. Fire spreads to
+    all connected trees via Moore neighborhood (8 neighbors). System exhibits
+    self-organized criticality with power law fire size distributions.
+
+Hybrid CPU/GPU Approach:
+    - GPU: Tree growth (parallel random generation)
+    - GPU: Clearing burning cells (parallel array operations)
+    - CPU: Fire spread via BFS (inherently sequential graph traversal)
+
+Performance Limitations:
+    Shows LIMITED GPU speedup (~1.3x at 400x400) due to:
+    - BFS fire spread is inherently sequential
+    - Requires frequent GPU-CPU data transfers for BFS
+    - Only tree growth benefits from parallelization
+
+When to Use:
+    - GPU version: Very large grids (500x500+) or when GPU is idle
+    - CPU version: Most use cases - comparable or better performance
+
+Example:
+    >>> sim = ForestFireGPU(size=200, tree_growth_prob=0.01, seed=42)
+    >>> sim.run(5000)
+    >>> sizes, freqs = sim.get_fire_distribution()
+    >>> # Plot log-log to see power law
 """
 
 import cupy as cp
@@ -22,22 +43,40 @@ BURNING = 2
 
 
 class ForestFireGPU:
-    """
-    GPU-accelerated Forest Fire simulation using hybrid approach.
+    """GPU-accelerated Forest Fire simulation using hybrid CPU/GPU approach.
 
-    Tree growth and cell clearing run on GPU, while fire spread
-    uses CPU-based BFS (graph traversal is inherently sequential).
+    Implements Drossel-Schwabl forest fire model with GPU-accelerated tree
+    growth and CPU-based fire spread. The hybrid approach provides modest
+    speedup for large grids but BFS limits parallelization.
+
+    Attributes:
+        size (int): Grid dimension (creates size x size grid).
+        p (float): Tree growth probability per empty cell per timestep.
+        f (float): Lightning strike probability per tree per timestep.
+        seed (int): Random seed for reproducibility.
+        grid (cupy.ndarray): Current state on GPU (0=empty, 1=tree, 2=burning).
+        timestep (int): Current simulation timestep.
+        fire_sizes (list): Sizes of all fires (trees burned per fire).
+        tree_counts (list): Tree count history over time.
+
+    Example:
+        >>> sim = ForestFireGPU(size=200, tree_growth_prob=0.01)
+        >>> sim.run(5000)
+        >>> print(f"Largest fire: {max(sim.fire_sizes)}")
     """
 
     def __init__(self, size=256, tree_growth_prob=0.01, lightning_prob=None, seed=None):
-        """
-        Initialize the GPU-accelerated Forest Fire simulation.
+        """Initialize the GPU-accelerated Forest Fire simulation.
 
         Args:
-            size: Grid size (size x size)
-            tree_growth_prob: Probability p that an empty cell grows a tree
-            lightning_prob: Probability f of lightning strike (default: p/10)
-            seed: Random seed for reproducibility
+            size (int): Grid size (creates size x size grid, default: 256).
+            tree_growth_prob (float): Probability p that empty cell grows tree (default: 0.01).
+            lightning_prob (float, optional): Probability f of lightning strike (default: p/10).
+            seed (int, optional): Random seed for reproducibility.
+
+        Note:
+            Grid initialized on GPU. Both GPU and CPU RNGs are seeded for
+            hybrid operations.
         """
         self.size = size
         self.p = tree_growth_prob
@@ -89,11 +128,24 @@ class ForestFireGPU:
         return cp.argwhere(self.grid == TREE)
 
     def _spread_fire_cpu(self, start_i, start_j, grid_cpu):
-        """
-        Spread fire from a starting point using BFS (CPU).
+        """Spread fire from ignition point using breadth-first search on CPU.
 
-        This must run on CPU as BFS is inherently sequential.
-        Returns trees burned.
+        Fire spreads through all connected trees using Moore neighborhood
+        (8 adjacent cells). BFS ensures all reachable trees burn.
+
+        Args:
+            start_i (int): Row of ignition point.
+            start_j (int): Column of ignition point.
+            grid_cpu (numpy.ndarray): Grid state on CPU (modified in place).
+
+        Returns:
+            tuple: (trees_burned, modified_grid)
+                - trees_burned (int): Number of trees consumed by fire
+                - modified_grid: Updated grid with burned cells marked
+
+        Note:
+            BFS is inherently sequential (graph traversal), requiring CPU.
+            This is the performance bottleneck limiting GPU speedup.
         """
         if grid_cpu[start_i, start_j] != TREE:
             return 0, grid_cpu
@@ -145,7 +197,17 @@ class ForestFireGPU:
         self.grid = cp.asarray(grid_cpu)
 
     def step(self):
-        """Perform one simulation step."""
+        """Perform one simulation timestep.
+
+        Sequence:
+            1. Clear burning cells (GPU)
+            2. Grow new trees (GPU)
+            3. Attempt lightning strike and spread fire (CPU/hybrid)
+            4. Record tree count
+
+        Note:
+            Most time is spent in fire spread (CPU BFS), limiting GPU benefits.
+        """
         self.timestep += 1
         self._clear_burning_cells()
         self._grow_trees()
@@ -153,11 +215,27 @@ class ForestFireGPU:
         self.tree_counts.append(self.count_trees())
 
     def run(self, num_steps, progress_interval=1000):
-        """Run the simulation for a number of steps."""
+        """Run simulation for specified number of timesteps.
+
+        Args:
+            num_steps (int): Number of timesteps to simulate.
+            progress_interval (int, optional): Print progress every N steps.
+                Set to None to disable progress output (default: 1000).
+
+        Example:
+            >>> sim = ForestFireGPU(size=200)
+            >>> sim.run(10000, progress_interval=2500)
+            Step 2500/10000, Trees: 15234, Fires: 145
+            Step 5000/10000, Trees: 15198, Fires: 289
+            ...
+        """
         for step_num in range(num_steps):
             self.step()
             if progress_interval and (step_num + 1) % progress_interval == 0:
-                print(f"Step {step_num + 1}/{num_steps}, Trees: {self.count_trees()}, Fires: {len(self.fire_sizes)}")
+                print(
+                    f"Step {step_num + 1}/{num_steps}, "
+                    f"Trees: {self.count_trees()}, Fires: {len(self.fire_sizes)}"
+                )
 
     def run_batch(self, num_steps, batch_size=100):
         """
