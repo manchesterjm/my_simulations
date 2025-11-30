@@ -412,7 +412,7 @@ INTERACTIVITY:
 
         // ===== ANIMATED ANTS =====
         let activeAnts = [];  // Ants currently moving on the graph
-        let antSpeed = 0.08;  // How fast ants move (0-1 progress per frame)
+        let baseAntSpeed = 0.01;  // Base speed - modified by speed slider
         let showAnts = true;  // Whether to show animated ants
         let maxVisibleAnts = 500;  // Maximum ants to display at once
 
@@ -832,7 +832,8 @@ INTERACTIVITY:
             move() {
                 if (this.finished || this.targetNode === null) return;
 
-                this.progress += antSpeed;
+                // Speed slider controls ant movement speed
+                this.progress += baseAntSpeed * speed;
 
                 // Interpolate position
                 const p1 = positions[this.currentNode];
@@ -1213,10 +1214,8 @@ INTERACTIVITY:
         function animate() {
             if (!running) return;
 
-            // Run simulation steps based on speed
-            for (let i = 0; i < speed; i++) {
-                updateSimulation();
-            }
+            // Run simulation (speed is handled in ant movement)
+            updateSimulation();
 
             draw();
             animationId = requestAnimationFrame(animate);
