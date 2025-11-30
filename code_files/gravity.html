@@ -427,6 +427,9 @@
         let starRadiusMultiplier = 1.0;
         let starDensityMultiplier = 1.0;
 
+        // Mass threshold for small body to become a planet
+        const PLANET_MASS_THRESHOLD = 1e20;  // ~100x typical asteroid mass
+
         // Planet colors
         const COLORS = [
             '#4a9eff', '#ff6b6b', '#4ecdc4', '#ffe66d',
@@ -834,6 +837,15 @@
                                 toRemove.add(j);
                                 collisions++;
                                 logEvent(`${p2.name} merged into ${p1.name}!`, 'collision');
+
+                                // Check if it should become a planet
+                                if (p1.mass >= PLANET_MASS_THRESHOLD) {
+                                    const oldName = p1.name;
+                                    p1.type = undefined;
+                                    p1.name = `Protoplanet ${Math.floor(Math.random() * 1000)}`;
+                                    p1.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+                                    logEvent(`${oldName} became a planet!`, 'ejection');
+                                }
                             } else {
                                 // p2 absorbs p1
                                 p2.vx = (p2.mass * p2.vx + p1.mass * p1.vx) / (p2.mass + p1.mass);
@@ -843,6 +855,15 @@
                                 toRemove.add(i);
                                 collisions++;
                                 logEvent(`${p1.name} merged into ${p2.name}!`, 'collision');
+
+                                // Check if it should become a planet
+                                if (p2.mass >= PLANET_MASS_THRESHOLD) {
+                                    const oldName = p2.name;
+                                    p2.type = undefined;
+                                    p2.name = `Protoplanet ${Math.floor(Math.random() * 1000)}`;
+                                    p2.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+                                    logEvent(`${oldName} became a planet!`, 'ejection');
+                                }
                             }
                         } else {
                             // Both are planets - merge them (larger absorbs smaller)
