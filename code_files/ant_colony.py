@@ -30,28 +30,36 @@ import argparse
 
 class Graph:
     """
-    Random graph representing a road network.
+    Grid-based graph representing a road network.
 
-    Generates a connected graph with random edge costs between 1 and 10.
-    Uses a combination of nearest-neighbor connections and random edges
-    to create a realistic road-network-like structure.
+    Generates a connected graph with nodes arranged in a grid pattern,
+    similar to a city street map. Edges connect adjacent nodes with
+    random costs between 1 and 10.
     """
 
     def __init__(self, n_nodes: int = 30, min_cost: float = 1.0,
                  max_cost: float = 10.0, seed: Optional[int] = None):
         """
-        Initialize a random connected graph.
+        Initialize a grid-based graph.
 
         Args:
-            n_nodes: Number of nodes in the graph
+            n_nodes: Approximate number of nodes (actual may vary for grid fit)
             min_cost: Minimum edge cost
             max_cost: Maximum edge cost
             seed: Random seed for reproducibility
         """
-        self.n_nodes = n_nodes
         self.min_cost = min_cost
         self.max_cost = max_cost
         self.rng = np.random.default_rng(seed)
+
+        # Calculate grid dimensions (try to make it roughly square)
+        self.cols = int(np.ceil(np.sqrt(n_nodes * 1.5)))  # Wider than tall
+        self.rows = int(np.ceil(n_nodes / self.cols))
+        self.n_nodes = self.rows * self.cols
+
+        # Grid coordinate lookup
+        self.grid = {}  # (row, col) -> node_id
+        self.node_to_grid = {}  # node_id -> (row, col)
 
         # Generate node positions for visualization
         self.positions = self._generate_positions()
@@ -65,55 +73,66 @@ class Graph:
         self._build_adjacency()
 
     def _generate_positions(self) -> Dict[int, Tuple[float, float]]:
-        """Generate 2D positions for nodes."""
+        """Generate 2D positions for nodes in a grid pattern."""
         positions = {}
-        for i in range(self.n_nodes):
-            # Arrange in a roughly circular/grid pattern with some randomness
-            angle = 2 * np.pi * i / self.n_nodes
-            radius = 0.3 + 0.4 * self.rng.random()
-            x = 0.5 + radius * np.cos(angle) + 0.1 * self.rng.random()
-            y = 0.5 + radius * np.sin(angle) + 0.1 * self.rng.random()
-            positions[i] = (x, y)
+        node_id = 0
+
+        # Padding from edges
+        padding = 0.08
+        width = 1.0 - 2 * padding
+        height = 1.0 - 2 * padding
+
+        for row in range(self.rows):
+            for col in range(self.cols):
+                # Base grid position
+                base_x = padding + (col / (self.cols - 1)) * width if self.cols > 1 else 0.5
+                base_y = padding + (row / (self.rows - 1)) * height if self.rows > 1 else 0.5
+
+                # Add small random offset for natural look (like real streets)
+                jitter = 0.02
+                x = base_x + self.rng.uniform(-jitter, jitter)
+                y = base_y + self.rng.uniform(-jitter, jitter)
+
+                positions[node_id] = (x, y)
+                self.grid[(row, col)] = node_id
+                self.node_to_grid[node_id] = (row, col)
+                node_id += 1
+
         return positions
 
     def _generate_edges(self):
-        """Generate a connected graph with random edge costs."""
-        # First, create a minimum spanning tree to ensure connectivity
-        # Using nearest-neighbor heuristic
-        connected = {0}
-        unconnected = set(range(1, self.n_nodes))
+        """Generate edges connecting adjacent grid nodes."""
+        for row in range(self.rows):
+            for col in range(self.cols):
+                node = self.grid[(row, col)]
 
-        while unconnected:
-            best_dist = float('inf')
-            best_pair = None
-
-            for c in connected:
-                for u in unconnected:
-                    dist = self._distance(c, u)
-                    if dist < best_dist:
-                        best_dist = dist
-                        best_pair = (c, u)
-
-            if best_pair:
-                c, u = best_pair
-                cost = self.min_cost + self.rng.random() * (self.max_cost - self.min_cost)
-                self._add_edge(c, u, cost)
-                connected.add(u)
-                unconnected.remove(u)
-
-        # Add additional random edges for multiple paths
-        target_edges = self.n_nodes * 2  # Average degree of 4
-
-        while len(self.edges) < target_edges:
-            u = self.rng.integers(0, self.n_nodes)
-            v = self.rng.integers(0, self.n_nodes)
-
-            if u != v and (u, v) not in self.edges and (v, u) not in self.edges:
-                # Prefer nearby nodes
-                dist = self._distance(u, v)
-                if dist < 0.5 or self.rng.random() < 0.3:
+                # Connect to right neighbor (horizontal street)
+                if col < self.cols - 1:
+                    neighbor = self.grid[(row, col + 1)]
                     cost = self.min_cost + self.rng.random() * (self.max_cost - self.min_cost)
-                    self._add_edge(u, v, cost)
+                    self._add_edge(node, neighbor, cost)
+
+                # Connect to bottom neighbor (vertical street)
+                if row < self.rows - 1:
+                    neighbor = self.grid[(row + 1, col)]
+                    cost = self.min_cost + self.rng.random() * (self.max_cost - self.min_cost)
+                    self._add_edge(node, neighbor, cost)
+
+                # Connect diagonals (with some probability for variety)
+                # Bottom-right diagonal
+                if row < self.rows - 1 and col < self.cols - 1:
+                    if self.rng.random() < 0.4:  # 40% chance for diagonal
+                        neighbor = self.grid[(row + 1, col + 1)]
+                        # Diagonal costs slightly higher (longer distance)
+                        cost = (self.min_cost + self.rng.random() * (self.max_cost - self.min_cost)) * 1.2
+                        self._add_edge(node, neighbor, cost)
+
+                # Bottom-left diagonal
+                if row < self.rows - 1 and col > 0:
+                    if self.rng.random() < 0.4:  # 40% chance for diagonal
+                        neighbor = self.grid[(row + 1, col - 1)]
+                        cost = (self.min_cost + self.rng.random() * (self.max_cost - self.min_cost)) * 1.2
+                        self._add_edge(node, neighbor, cost)
 
     def _distance(self, u: int, v: int) -> float:
         """Euclidean distance between two nodes."""

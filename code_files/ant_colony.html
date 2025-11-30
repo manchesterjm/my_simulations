@@ -472,6 +472,11 @@ INTERACTIVITY:
             draw();
         }
 
+        // ===== GRID DIMENSIONS =====
+        let gridRows = 5;
+        let gridCols = 6;
+        let grid = {};  // (row, col) -> node_id
+
         // ===== GRAPH GENERATION =====
         function generateGraph() {
             nodes = [];
@@ -479,61 +484,82 @@ INTERACTIVITY:
             adjacency = {};
             positions = {};
             pheromones = {};
+            grid = {};
 
-            // Generate node positions in a circular/random pattern
-            for (let i = 0; i < numNodes; i++) {
-                const angle = (2 * Math.PI * i) / numNodes;
-                const radius = 0.3 + 0.15 * Math.random();
-                const x = 0.5 + radius * Math.cos(angle) + 0.05 * (Math.random() - 0.5);
-                const y = 0.5 + radius * Math.sin(angle) + 0.05 * (Math.random() - 0.5);
-                positions[i] = { x, y };
-                nodes.push(i);
-                adjacency[i] = [];
+            // Calculate grid dimensions (roughly square, wider than tall)
+            gridCols = Math.ceil(Math.sqrt(numNodes * 1.5));
+            gridRows = Math.ceil(numNodes / gridCols);
+            const actualNodes = gridRows * gridCols;
+
+            // Update destination if needed
+            if (destination >= actualNodes) {
+                destination = actualNodes - 1;
+                document.getElementById('destNode').value = destination;
             }
 
-            // Create minimum spanning tree for connectivity
-            const connected = new Set([0]);
-            const unconnected = new Set(nodes.slice(1));
+            // Generate node positions in a grid pattern
+            const padding = 0.08;
+            const width = 1.0 - 2 * padding;
+            const height = 1.0 - 2 * padding;
+            let nodeId = 0;
 
-            while (unconnected.size > 0) {
-                let bestDist = Infinity;
-                let bestPair = null;
+            for (let row = 0; row < gridRows; row++) {
+                for (let col = 0; col < gridCols; col++) {
+                    // Base grid position
+                    const baseX = gridCols > 1 ? padding + (col / (gridCols - 1)) * width : 0.5;
+                    const baseY = gridRows > 1 ? padding + (row / (gridRows - 1)) * height : 0.5;
 
-                for (const c of connected) {
-                    for (const u of unconnected) {
-                        const dist = distance(c, u);
-                        if (dist < bestDist) {
-                            bestDist = dist;
-                            bestPair = [c, u];
+                    // Add small random offset for natural look
+                    const jitter = 0.015;
+                    const x = baseX + (Math.random() - 0.5) * 2 * jitter;
+                    const y = baseY + (Math.random() - 0.5) * 2 * jitter;
+
+                    positions[nodeId] = { x, y };
+                    nodes.push(nodeId);
+                    adjacency[nodeId] = [];
+                    grid[`${row},${col}`] = nodeId;
+                    nodeId++;
+                }
+            }
+
+            // Generate edges connecting adjacent grid nodes
+            for (let row = 0; row < gridRows; row++) {
+                for (let col = 0; col < gridCols; col++) {
+                    const node = grid[`${row},${col}`];
+
+                    // Connect to right neighbor (horizontal street)
+                    if (col < gridCols - 1) {
+                        const neighbor = grid[`${row},${col + 1}`];
+                        const cost = 1 + Math.random() * 9;
+                        addEdge(node, neighbor, cost);
+                    }
+
+                    // Connect to bottom neighbor (vertical street)
+                    if (row < gridRows - 1) {
+                        const neighbor = grid[`${row + 1},${col}`];
+                        const cost = 1 + Math.random() * 9;
+                        addEdge(node, neighbor, cost);
+                    }
+
+                    // Connect diagonals (with probability for variety)
+                    // Bottom-right diagonal
+                    if (row < gridRows - 1 && col < gridCols - 1) {
+                        if (Math.random() < 0.4) {
+                            const neighbor = grid[`${row + 1},${col + 1}`];
+                            const cost = (1 + Math.random() * 9) * 1.2;  // Diagonal slightly more expensive
+                            addEdge(node, neighbor, cost);
+                        }
+                    }
+
+                    // Bottom-left diagonal
+                    if (row < gridRows - 1 && col > 0) {
+                        if (Math.random() < 0.4) {
+                            const neighbor = grid[`${row + 1},${col - 1}`];
+                            const cost = (1 + Math.random() * 9) * 1.2;
+                            addEdge(node, neighbor, cost);
                         }
                     }
                 }
-
-                if (bestPair) {
-                    const [c, u] = bestPair;
-                    const cost = 1 + Math.random() * 9;
-                    addEdge(c, u, cost);
-                    connected.add(u);
-                    unconnected.delete(u);
-                }
-            }
-
-            // Add extra edges for multiple paths
-            const targetEdges = numNodes * 2;
-            let attempts = 0;
-
-            while (edges.length < targetEdges && attempts < 1000) {
-                const u = Math.floor(Math.random() * numNodes);
-                const v = Math.floor(Math.random() * numNodes);
-
-                if (u !== v && !hasEdge(u, v)) {
-                    const dist = distance(u, v);
-                    if (dist < 0.4 || Math.random() < 0.2) {
-                        const cost = 1 + Math.random() * 9;
-                        addEdge(u, v, cost);
-                    }
-                }
-                attempts++;
             }
 
             // Initialize pheromones
@@ -541,6 +567,11 @@ INTERACTIVITY:
                 const key = edgeKey(edge.u, edge.v);
                 pheromones[key] = 1.0;
             }
+
+            // Update numNodes to actual grid size
+            numNodes = actualNodes;
+            document.getElementById('sourceNode').max = numNodes - 1;
+            document.getElementById('destNode').max = numNodes - 1;
         }
 
         function distance(u, v) {
