@@ -313,7 +313,7 @@ INTERACTIVITY:
                     <h3>ACO Parameters</h3>
                     <div class="control-row">
                         <label>Ants/Iteration:</label>
-                        <input type="range" id="numAnts" min="10" max="200" value="50">
+                        <input type="range" id="numAnts" min="10" max="1000" step="10" value="50">
                         <span class="value-display" id="numAntsValue">50</span>
                     </div>
                     <div class="control-row">
@@ -414,7 +414,7 @@ INTERACTIVITY:
         let activeAnts = [];  // Ants currently moving on the graph
         let antSpeed = 0.015;  // How fast ants move (0-1 progress per frame)
         let showAnts = true;  // Whether to show animated ants
-        let maxVisibleAnts = 200;  // Maximum ants to display at once
+        let maxVisibleAnts = 500;  // Maximum ants to display at once
 
         // ===== PARAMETERS =====
         let numNodes = 30;
