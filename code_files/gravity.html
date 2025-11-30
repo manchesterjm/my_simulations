@@ -154,6 +154,36 @@
             color: white;
         }
 
+        .btn-nudge {
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            margin: 0 3px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffd700;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-nudge:hover {
+            background: rgba(255, 215, 0, 0.3);
+        }
+
+        .slider-with-nudge {
+            display: flex;
+            align-items: center;
+        }
+
+        .slider-with-nudge input[type="range"] {
+            width: 80px;
+        }
+
         .stats {
             font-family: monospace;
             font-size: 12px;
@@ -259,12 +289,20 @@
                     <h3>Star Properties</h3>
                     <div class="control-row">
                         <label>Radius:</label>
-                        <input type="range" id="starRadius" min="1" max="100" value="50">
+                        <div class="slider-with-nudge">
+                            <button class="btn-nudge" id="starRadiusDown">−</button>
+                            <input type="range" id="starRadius" min="1" max="100" value="50">
+                            <button class="btn-nudge" id="starRadiusUp">+</button>
+                        </div>
                         <span class="value-display" id="starRadiusValue">1.0x</span>
                     </div>
                     <div class="control-row">
                         <label>Density:</label>
-                        <input type="range" id="starDensity" min="1" max="100" value="50">
+                        <div class="slider-with-nudge">
+                            <button class="btn-nudge" id="starDensityDown">−</button>
+                            <input type="range" id="starDensity" min="1" max="100" value="50">
+                            <button class="btn-nudge" id="starDensityUp">+</button>
+                        </div>
                         <span class="value-display" id="starDensityValue">1.0x</span>
                     </div>
                     <div class="control-row">
@@ -456,6 +494,12 @@
                 updateStarProperties();
             });
 
+            // Nudge buttons for star radius
+            document.getElementById('starRadiusDown').addEventListener('click', () => nudgeSlider('starRadius', -1));
+            document.getElementById('starRadiusUp').addEventListener('click', () => nudgeSlider('starRadius', 1));
+            document.getElementById('starDensityDown').addEventListener('click', () => nudgeSlider('starDensity', -1));
+            document.getElementById('starDensityUp').addEventListener('click', () => nudgeSlider('starDensity', 1));
+
             canvas.addEventListener('click', onCanvasClick);
 
             resetSimulation();
@@ -510,6 +554,14 @@
             // Display mass in solar masses
             const solarMasses = star.mass / BASE_STAR_MASS;
             document.getElementById('starMassValue').textContent = solarMasses.toFixed(2) + ' M☉';
+        }
+
+        function nudgeSlider(sliderId, delta) {
+            const slider = document.getElementById(sliderId);
+            const newValue = Math.max(1, Math.min(100, parseInt(slider.value) + delta));
+            slider.value = newValue;
+            // Trigger the input event to update the display and properties
+            slider.dispatchEvent(new Event('input'));
         }
 
         function addRandomPlanet() {
