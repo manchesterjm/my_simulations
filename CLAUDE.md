@@ -20,6 +20,7 @@ Physics simulations demonstrating **self-organized criticality**, **power law di
 │   ├── forest_fire.py     # Forest fire (CPU + GPU backend)
 │   ├── forest_fire_gpu.py # GPU implementation
 │   ├── epidemic.py        # Agent-based SIR epidemic model
+│   ├── gravity.py         # N-body gravity simulator
 │   ├── noodle_loops.py    # Monte Carlo probability simulation
 │   ├── cache_sim.py       # CPU cache simulator
 │   ├── run_all.py         # Combined SOC demo
@@ -28,12 +29,14 @@ Physics simulations demonstrating **self-organized criticality**, **power law di
 ├── features/              # BDD specifications (Gherkin)
 │   ├── sandpile.feature
 │   ├── ising_model.feature
-│   └── forest_fire.feature
-├── tests/                 # Test files (78 tests total)
+│   ├── forest_fire.feature
+│   └── gravity.feature
+├── tests/                 # Test files (105 tests total)
 │   ├── test_sandpile.py
 │   ├── test_ising_model.py
 │   ├── test_forest_fire.py
-│   └── test_epidemic.py
+│   ├── test_epidemic.py
+│   └── test_gravity.py
 ├── sessions/              # Session logs (SESSION_YYYYMMDD_HHMMSS.md)
 └── support_files/         # Configuration and reference
     ├── requirements.txt
@@ -73,6 +76,12 @@ python code_files/epidemic.py              # Basic SIR simulation
 python code_files/epidemic.py --compare    # Compare infection rates
 python code_files/epidemic.py --vaccine    # Vaccination demo
 
+# N-Body Gravity Simulation
+python code_files/gravity.py              # Quick demo (solar system)
+python code_files/gravity.py --animate    # Animated with random planets
+python code_files/gravity.py --collision  # Collision demo
+python code_files/gravity.py --ejection   # Ejection demo
+
 # Monte Carlo
 python code_files/noodle_loops.py --n 7 --trials 100000
 
@@ -99,6 +108,7 @@ Each simulation follows the same pattern:
 | Ising | `temperature=2.269` (Curie temperature Tc) |
 | Forest Fire | `tree_growth_prob=0.01`, `lightning_prob=p/10` |
 | Epidemic | `infection_prob=0.01`, `infectious_days=2`, `visits_per_day=3` |
+| Gravity | `star_mass`, `n_planets`, `dt=3600` (timestep) |
 
 All simulations accept a `seed` parameter for reproducibility.
 
@@ -146,7 +156,7 @@ When a test fails, fix it immediately. Do not report a failure and move on—dia
 ### Testing Requirements
 
 ```bash
-# Unit tests (78 tests)
+# Unit tests (105 tests)
 pytest tests/ -v
 ```
 
