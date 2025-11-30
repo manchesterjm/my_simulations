@@ -408,8 +408,9 @@ INTERACTIVITY:
 
         // ===== ANIMATED ANTS =====
         let activeAnts = [];  // Ants currently moving on the graph
-        let antSpeed = 0.02;  // How fast ants move (0-1 progress per frame)
+        let antSpeed = 0.015;  // How fast ants move (0-1 progress per frame)
         let showAnts = true;  // Whether to show animated ants
+        let maxVisibleAnts = 200;  // Maximum ants to display at once
 
         // ===== PARAMETERS =====
         let numNodes = 30;
@@ -786,8 +787,8 @@ INTERACTIVITY:
                     const pathKey = ant.path.join('-');
                     pathCounts[pathKey] = (pathCounts[pathKey] || 0) + 1;
 
-                    // Create animated ant for visualization
-                    if (showAnts && activeAnts.length < 50) {  // Limit visible ants
+                    // Create animated ant for visualization (show many ants exploring)
+                    if (showAnts && activeAnts.length < maxVisibleAnts) {
                         activeAnts.push(new AnimatedAnt(ant.path, ant.pathCost));
                     }
                 }
@@ -924,7 +925,25 @@ INTERACTIVITY:
             // Find max pheromone for normalization
             const maxPheromone = Math.max(...Object.values(pheromones), 1);
 
-            // Draw edges
+            // Draw edges - base layer (thin gray lines for all connections)
+            for (const edge of edges) {
+                const p1 = positions[edge.u];
+                const p2 = positions[edge.v];
+                const x1 = padding + p1.x * (width - 2 * padding);
+                const y1 = padding + p1.y * (height - 2 * padding);
+                const x2 = padding + p2.x * (width - 2 * padding);
+                const y2 = padding + p2.y * (height - 2 * padding);
+
+                // Draw base edge (thin gray)
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            // Draw pheromone trails (red, thicker = more pheromone)
             for (const edge of edges) {
                 const p1 = positions[edge.u];
                 const p2 = positions[edge.v];
@@ -937,12 +956,16 @@ INTERACTIVITY:
                 const pheromone = pheromones[key] || 0;
                 const intensity = pheromone / maxPheromone;
 
-                ctx.beginPath();
-                ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y2);
-                ctx.strokeStyle = `rgba(100, 150, 200, ${0.2 + 0.6 * intensity})`;
-                ctx.lineWidth = 1 + 4 * intensity;
-                ctx.stroke();
+                // Only draw if there's significant pheromone
+                if (intensity > 0.05) {
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    // Red pheromone trails like in the reference image
+                    ctx.strokeStyle = `rgba(255, 50, 50, ${0.3 + 0.7 * intensity})`;
+                    ctx.lineWidth = 1 + 6 * intensity;
+                    ctx.stroke();
+                }
             }
 
             // Draw optimal path if showing
@@ -1016,14 +1039,11 @@ INTERACTIVITY:
                     const x = padding + ant.x * (width - 2 * padding);
                     const y = padding + ant.y * (height - 2 * padding);
 
-                    // Draw ant as small black dot with yellow outline
+                    // Draw ant as small black dot (like in reference image)
                     ctx.beginPath();
-                    ctx.arc(x, y, 5, 0, Math.PI * 2);
+                    ctx.arc(x, y, 3, 0, Math.PI * 2);
                     ctx.fillStyle = '#000';
                     ctx.fill();
-                    ctx.strokeStyle = '#ffcc00';
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
                 }
             }
         }
@@ -1137,8 +1157,21 @@ INTERACTIVITY:
             frameCount++;
 
             // Run ACO iteration every few frames (based on speed)
-            if (frameCount % Math.max(1, Math.floor(10 / speed)) === 0) {
+            // This handles pheromone updates and statistics
+            if (frameCount % Math.max(1, Math.floor(15 / speed)) === 0) {
                 runIteration();
+            }
+
+            // Continuously spawn exploring ants (independent of iteration)
+            // This creates the visual effect of constant exploration
+            if (frameCount % 3 === 0 && activeAnts.length < maxVisibleAnts) {
+                // Spawn a few ants that explore based on current pheromones
+                for (let i = 0; i < Math.min(5, maxVisibleAnts - activeAnts.length); i++) {
+                    const ant = new Ant();
+                    if (ant.traverse()) {
+                        activeAnts.push(new AnimatedAnt(ant.path, ant.pathCost));
+                    }
+                }
             }
 
             // Update animated ants every frame for smooth movement
