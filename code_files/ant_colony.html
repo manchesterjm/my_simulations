@@ -275,6 +275,10 @@ INTERACTIVITY:
                             <span>Pheromone Trail</span>
                         </div>
                         <div class="legend-item">
+                            <div class="legend-dot" style="background: #ffa500; width: 20px; height: 4px; border-radius: 2px;"></div>
+                            <span>Traffic/Blocked</span>
+                        </div>
+                        <div class="legend-item">
                             <div class="legend-dot" style="background: #000;"></div>
                             <span>Ant</span>
                         </div>
@@ -291,6 +295,7 @@ INTERACTIVITY:
                     <button id="startStop" class="btn-primary">Start</button>
                     <button id="reset" class="btn-secondary">New Graph</button>
                     <button id="showDijkstra" class="btn-secondary">Show Optimal Path</button>
+                    <button id="trafficEvent" class="btn-secondary" style="background: #ff5722; color: white;">Traffic Event</button>
                 </div>
 
                 <div class="control-section">
@@ -416,6 +421,9 @@ INTERACTIVITY:
         let showAnts = true;  // Whether to show animated ants
         let maxVisibleAnts = 500;  // Maximum ants to display at once
 
+        // ===== TRAFFIC EVENTS =====
+        let blockedEdges = new Set();  // Edges with high cost (traffic/accidents)
+
         // ===== PARAMETERS =====
         let numNodes = 30;
         let numAnts = 50;
@@ -436,6 +444,7 @@ INTERACTIVITY:
             document.getElementById('startStop').addEventListener('click', toggleSimulation);
             document.getElementById('reset').addEventListener('click', resetSimulation);
             document.getElementById('showDijkstra').addEventListener('click', toggleOptimal);
+            document.getElementById('trafficEvent').addEventListener('click', triggerTrafficEvent);
 
             document.getElementById('numNodes').addEventListener('change', (e) => {
                 numNodes = parseInt(e.target.value);
@@ -947,6 +956,7 @@ INTERACTIVITY:
             pathCounts = {};
             activeAnts = [];  // Clear all ants
             evaporationTimer = 0;
+            blockedEdges.clear();  // Clear traffic events
 
             // Reinitialize pheromones (low initial value so trails build up visibly)
             for (const edge of edges) {
@@ -965,6 +975,40 @@ INTERACTIVITY:
 
         function toggleOptimal() {
             showOptimal = !showOptimal;
+            draw();
+        }
+
+        function triggerTrafficEvent() {
+            // Clear previous blocked edges after some time, or add new ones
+            const edgeKeys = Object.keys(pheromones);
+
+            if (edgeKeys.length === 0) return;
+
+            // Pick 2-4 random edges to affect
+            const numEdgesToBlock = 2 + Math.floor(Math.random() * 3);
+
+            for (let i = 0; i < numEdgesToBlock; i++) {
+                const randomKey = edgeKeys[Math.floor(Math.random() * edgeKeys.length)];
+
+                // Find the edge and increase its cost dramatically
+                const [u, v] = randomKey.split('-').map(Number);
+                const edge = edges.find(e => edgeKey(e.u, e.v) === randomKey);
+
+                if (edge) {
+                    if (blockedEdges.has(randomKey)) {
+                        // Unblock - restore normal cost
+                        edge.cost = 1 + Math.random() * 9;
+                        blockedEdges.delete(randomKey);
+                    } else {
+                        // Block - set very high cost (traffic jam / accident)
+                        edge.cost = 50 + Math.random() * 50;  // 50-100 cost
+                        blockedEdges.add(randomKey);
+                        // Also reduce pheromone on this edge
+                        pheromones[randomKey] *= 0.1;
+                    }
+                }
+            }
+
             draw();
         }
 
@@ -1007,12 +1051,20 @@ INTERACTIVITY:
                 const x2 = padding + p2.x * (width - 2 * padding);
                 const y2 = padding + p2.y * (height - 2 * padding);
 
-                // Draw base edge (thin gray)
+                const key = edgeKey(edge.u, edge.v);
+                const isBlocked = blockedEdges.has(key);
+
+                // Draw base edge (thin gray, or orange if blocked)
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
-                ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
-                ctx.lineWidth = 1;
+                if (isBlocked) {
+                    ctx.strokeStyle = 'rgba(255, 165, 0, 0.8)';  // Orange for blocked
+                    ctx.lineWidth = 4;
+                } else {
+                    ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
+                    ctx.lineWidth = 1;
+                }
                 ctx.stroke();
             }
 
