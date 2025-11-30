@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forest Fire Simulation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        h1 {
+            margin-bottom: 10px;
+            color: #ff6b35;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 20px;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #000;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        label {
+            font-size: 12px;
+            color: #888;
+        }
+        input[type="range"] {
+            width: 120px;
+        }
+        button {
+            background: #ff6b35;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #ff8c5a;
+        }
+        .stats {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Forest Fire Simulation</h1>
+    <p class="subtitle">Self-Organized Criticality - Drossel-Schwabl Model</p>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background: #1a1a1a;"></div>
+            <span>Empty</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #228b22;"></div>
+            <span>Tree</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ff4500;"></div>
+            <span>Burning</span>
+        </div>
+    </div>
+
+    <div class="stats">
+        Step: <span id="step">0</span> |
+        Trees: <span id="trees">0</span> (<span id="density">0</span>%) |
+        Fires: <span id="fires">0</span> |
+        Largest Fire: <span id="largest">0</span>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Speed: <span id="speedVal">30</span> steps/sec</label>
+            <input type="range" id="speed" min="1" max="1000" value="30">
+        </div>
+        <div class="control-group">
+            <label>Tree Growth: <span id="growthVal">2</span>%</label>
+            <input type="range" id="growth" min="1" max="10" value="2">
+        </div>
+        <div class="control-group">
+            <label>Lightning: <span id="lightningVal">0.2</span>%</label>
+            <input type="range" id="lightning" min="1" max="20" value="2">
+        </div>
+        <button id="reset">Reset</button>
+        <button id="pause">Pause</button>
+    </div>
+
+    <script>
+        // Constants
+        const EMPTY = 0;
+        const TREE = 1;
+        const BURNING = 2;
+
+        // Colors
+        const COLORS = {
+            [EMPTY]: '#1a1a1a',
+            [TREE]: '#228b22',
+            [BURNING]: '#ff4500'
+        };
+
+        // Configuration
+        const GRID_SIZE = 200;
+        const CELL_SIZE = 3;
+
+        // Canvas setup
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = GRID_SIZE * CELL_SIZE;
+        canvas.height = GRID_SIZE * CELL_SIZE;
+
+        // Simulation state
+        let grid = [];
+        let step = 0;
+        let fireCount = 0;
+        let largestFire = 0;
+        let currentFireSize = 0;
+        let paused = false;
+        let lastTime = 0;
+        let stepsPerSecond = 30;
+
+        // Parameters
+        let treeGrowthProb = 0.02;
+        let lightningProb = 0.002;
+
+        // Initialize grid
+        function initGrid() {
+            grid = [];
+            for (let i = 0; i < GRID_SIZE; i++) {
+                grid[i] = [];
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    // Start with some random trees
+                    grid[i][j] = Math.random() < 0.3 ? TREE : EMPTY;
+                }
+            }
+            step = 0;
+            fireCount = 0;
+            largestFire = 0;
+            currentFireSize = 0;
+        }
+
+        // Get Moore neighbors (8-connected)
+        function getNeighbors(i, j) {
+            const neighbors = [];
+            for (let di = -1; di <= 1; di++) {
+                for (let dj = -1; dj <= 1; dj++) {
+                    if (di === 0 && dj === 0) continue;
+                    const ni = i + di;
+                    const nj = j + dj;
+                    if (ni >= 0 && ni < GRID_SIZE && nj >= 0 && nj < GRID_SIZE) {
+                        neighbors.push([ni, nj]);
+                    }
+                }
+            }
+            return neighbors;
+        }
+
+        // Check if there's an active fire
+        function hasActiveFire() {
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    if (grid[i][j] === BURNING) return true;
+                }
+            }
+            return false;
+        }
+
+        // Spread fire one layer
+        function spreadFire() {
+            const newBurning = [];
+            const toEmpty = [];
+
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    if (grid[i][j] === BURNING) {
+                        toEmpty.push([i, j]);
+                        for (const [ni, nj] of getNeighbors(i, j)) {
+                            if (grid[ni][nj] === TREE) {
+                                newBurning.push([ni, nj]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Convert burning to empty
+            for (const [i, j] of toEmpty) {
+                grid[i][j] = EMPTY;
+            }
+
+            // Mark new cells as burning
+            for (const [i, j] of newBurning) {
+                if (grid[i][j] === TREE) { // Check again to avoid duplicates
+                    grid[i][j] = BURNING;
+                    currentFireSize++;
+                }
+            }
+
+            // If fire is done, record it
+            if (newBurning.length === 0 && currentFireSize > 0) {
+                fireCount++;
+                if (currentFireSize > largestFire) {
+                    largestFire = currentFireSize;
+                }
+                currentFireSize = 0;
+            }
+        }
+
+        // Normal simulation step (no active fire)
+        function normalStep() {
+            step++;
+
+            // Grow trees
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    if (grid[i][j] === EMPTY && Math.random() < treeGrowthProb) {
+                        grid[i][j] = TREE;
+                    }
+                }
+            }
+
+            // Try lightning strike
+            const trees = [];
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    if (grid[i][j] === TREE) {
+                        trees.push([i, j]);
+                    }
+                }
+            }
+
+            if (trees.length > 0 && Math.random() < lightningProb * trees.length) {
+                const [i, j] = trees[Math.floor(Math.random() * trees.length)];
+                grid[i][j] = BURNING;
+                currentFireSize = 1;
+            }
+        }
+
+        // Simulation step
+        function simulationStep() {
+            if (hasActiveFire()) {
+                spreadFire();
+            } else {
+                normalStep();
+            }
+        }
+
+        // Count trees
+        function countTrees() {
+            let count = 0;
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    if (grid[i][j] === TREE) count++;
+                }
+            }
+            return count;
+        }
+
+        // Render
+        function render() {
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    ctx.fillStyle = COLORS[grid[i][j]];
+                    ctx.fillRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                }
+            }
+
+            // Update stats
+            const trees = countTrees();
+            const density = ((trees / (GRID_SIZE * GRID_SIZE)) * 100).toFixed(1);
+            document.getElementById('step').textContent = step;
+            document.getElementById('trees').textContent = trees;
+            document.getElementById('density').textContent = density;
+            document.getElementById('fires').textContent = fireCount;
+            document.getElementById('largest').textContent = largestFire;
+        }
+
+        // Animation loop
+        function animate(timestamp) {
+            if (!paused) {
+                const stepsPerFrame = Math.max(1, Math.floor(stepsPerSecond / 60));
+                for (let i = 0; i < stepsPerFrame; i++) {
+                    simulationStep();
+                }
+                render();
+                lastTime = timestamp;
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // Event listeners
+        document.getElementById('speed').addEventListener('input', (e) => {
+            stepsPerSecond = parseInt(e.target.value);
+            document.getElementById('speedVal').textContent = stepsPerSecond;
+        });
+
+        document.getElementById('growth').addEventListener('input', (e) => {
+            treeGrowthProb = parseInt(e.target.value) / 100;
+            document.getElementById('growthVal').textContent = e.target.value;
+        });
+
+        document.getElementById('lightning').addEventListener('input', (e) => {
+            lightningProb = parseInt(e.target.value) / 1000;
+            document.getElementById('lightningVal').textContent = (parseInt(e.target.value) / 10).toFixed(1);
+        });
+
+        document.getElementById('reset').addEventListener('click', () => {
+            initGrid();
+            render();
+        });
+
+        document.getElementById('pause').addEventListener('click', (e) => {
+            paused = !paused;
+            e.target.textContent = paused ? 'Resume' : 'Pause';
+        });
+
+        // Start
+        initGrid();
+        render();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>

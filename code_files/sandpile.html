@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sandpile Simulation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        h1 {
+            margin-bottom: 10px;
+            color: #f4a261;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #000;
+        }
+        .chart-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .chart-title {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        label {
+            font-size: 12px;
+            color: #888;
+        }
+        input[type="range"] {
+            width: 120px;
+        }
+        button {
+            background: #f4a261;
+            color: #1a1a2e;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #f4b982;
+        }
+        .stats {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        .legend {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sandpile Avalanche Simulation</h1>
+    <p class="subtitle">Abelian Sandpile Model - Self-Organized Criticality<br>
+    When a cell reaches 4 grains, it topples and distributes one grain to each neighbor</p>
+
+    <div class="container">
+        <div class="chart-container">
+            <canvas id="gridCanvas"></canvas>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #2d1f0f;"></div>
+                    <span>0</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #5c3d1e;"></div>
+                    <span>1</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #8b5a2b;"></div>
+                    <span>2</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #d4a574;"></div>
+                    <span>3</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ff6b6b;"></div>
+                    <span>4+ (toppling)</span>
+                </div>
+            </div>
+        </div>
+        <div class="chart-container">
+            <div class="chart-title">Avalanche Size Distribution (log-log)</div>
+            <canvas id="chartCanvas"></canvas>
+        </div>
+    </div>
+
+    <div class="stats">
+        Grains: <span id="grains">0</span> |
+        Avalanches: <span id="avalanches">0</span> |
+        Largest: <span id="largest">0</span> |
+        Current: <span id="current">0</span> topples
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Speed: <span id="speedVal">30</span> steps/sec</label>
+            <input type="range" id="speed" min="1" max="1000" value="30">
+        </div>
+        <div class="control-group">
+            <label>Drop Mode</label>
+            <select id="dropMode">
+                <option value="center">Center</option>
+                <option value="random" selected>Random</option>
+            </select>
+        </div>
+        <button id="reset">Reset</button>
+        <button id="pause">Pause</button>
+    </div>
+
+    <script>
+        // Configuration
+        const GRID_SIZE = 150;
+        const CELL_SIZE = 4;
+        const THRESHOLD = 4;
+        const CHART_WIDTH = 400;
+        const CHART_HEIGHT = 300;
+
+        // Colors for grain counts
+        const COLORS = [
+            '#2d1f0f',  // 0 grains
+            '#5c3d1e',  // 1 grain
+            '#8b5a2b',  // 2 grains
+            '#d4a574',  // 3 grains
+            '#ff6b6b'   // 4+ grains (toppling)
+        ];
+
+        // Canvas setup
+        const gridCanvas = document.getElementById('gridCanvas');
+        const gridCtx = gridCanvas.getContext('2d');
+        gridCanvas.width = GRID_SIZE * CELL_SIZE;
+        gridCanvas.height = GRID_SIZE * CELL_SIZE;
+
+        const chartCanvas = document.getElementById('chartCanvas');
+        const chartCtx = chartCanvas.getContext('2d');
+        chartCanvas.width = CHART_WIDTH;
+        chartCanvas.height = CHART_HEIGHT;
+
+        // Simulation state
+        let grid = [];
+        let totalGrains = 0;
+        let avalancheSizes = [];
+        let currentAvalancheSize = 0;
+        let largestAvalanche = 0;
+        let paused = false;
+        let lastTime = 0;
+        let stepsPerSecond = 30;
+        let dropMode = 'random';
+        let isToppling = false;
+
+        // Initialize grid
+        function initGrid() {
+            grid = [];
+            for (let i = 0; i < GRID_SIZE; i++) {
+                grid[i] = [];
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    grid[i][j] = 0;
+                }
+            }
+            totalGrains = 0;
+            avalancheSizes = [];
+            currentAvalancheSize = 0;
+            largestAvalanche = 0;
+            isToppling = false;
+        }
+
+        // Drop a grain
+        function dropGrain() {
+            let i, j;
+            if (dropMode === 'center') {
+                i = Math.floor(GRID_SIZE / 2);
+                j = Math.floor(GRID_SIZE / 2);
+            } else {
+                i = Math.floor(Math.random() * GRID_SIZE);
+                j = Math.floor(Math.random() * GRID_SIZE);
+            }
+            grid[i][j]++;
+            totalGrains++;
+        }
+
+        // Perform one toppling step
+        function toppleStep() {
+            let toppled = false;
+            const toTopple = [];
+
+            // Find all cells that need to topple
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    if (grid[i][j] >= THRESHOLD) {
+                        toTopple.push([i, j]);
+                    }
+                }
+            }
+
+            // Topple all at once (parallel update)
+            for (const [i, j] of toTopple) {
+                grid[i][j] -= 4;
+                currentAvalancheSize++;
+                toppled = true;
+
+                // Distribute to neighbors
+                if (i > 0) grid[i-1][j]++;
+                if (i < GRID_SIZE - 1) grid[i+1][j]++;
+                if (j > 0) grid[i][j-1]++;
+                if (j < GRID_SIZE - 1) grid[i][j+1]++;
+            }
+
+            return toppled;
+        }
+
+        // Check if any cell needs toppling
+        function needsToppling() {
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    if (grid[i][j] >= THRESHOLD) return true;
+                }
+            }
+            return false;
+        }
+
+        // Simulation step
+        function simulationStep() {
+            if (isToppling) {
+                // Continue toppling
+                const toppled = toppleStep();
+                if (!toppled) {
+                    // Avalanche finished
+                    isToppling = false;
+                    if (currentAvalancheSize > 0) {
+                        avalancheSizes.push(currentAvalancheSize);
+                        if (currentAvalancheSize > largestAvalanche) {
+                            largestAvalanche = currentAvalancheSize;
+                        }
+                    }
+                    currentAvalancheSize = 0;
+                }
+            } else {
+                // Drop a grain
+                dropGrain();
+                if (needsToppling()) {
+                    isToppling = true;
+                }
+            }
+        }
+
+        // Render grid
+        function renderGrid() {
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    const grains = grid[i][j];
+                    gridCtx.fillStyle = COLORS[Math.min(grains, 4)];
+                    gridCtx.fillRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                }
+            }
+        }
+
+        // Render power law chart
+        function renderChart() {
+            chartCtx.fillStyle = '#0a0a15';
+            chartCtx.fillRect(0, 0, CHART_WIDTH, CHART_HEIGHT);
+
+            if (avalancheSizes.length < 10) {
+                chartCtx.fillStyle = '#666';
+                chartCtx.font = '14px sans-serif';
+                chartCtx.textAlign = 'center';
+                chartCtx.fillText('Collecting data...', CHART_WIDTH / 2, CHART_HEIGHT / 2);
+                return;
+            }
+
+            // Count frequencies
+            const counts = {};
+            for (const size of avalancheSizes) {
+                counts[size] = (counts[size] || 0) + 1;
+            }
+
+            const sizes = Object.keys(counts).map(Number).sort((a, b) => a - b);
+            const frequencies = sizes.map(s => counts[s]);
+
+            if (sizes.length === 0) return;
+
+            // Log scale bounds
+            const minSize = Math.max(1, Math.min(...sizes));
+            const maxSize = Math.max(...sizes);
+            const minFreq = Math.max(1, Math.min(...frequencies));
+            const maxFreq = Math.max(...frequencies);
+
+            const logMinSize = Math.log10(minSize);
+            const logMaxSize = Math.log10(maxSize);
+            const logMinFreq = Math.log10(minFreq);
+            const logMaxFreq = Math.log10(maxFreq);
+
+            const padding = 50;
+            const chartW = CHART_WIDTH - padding * 2;
+            const chartH = CHART_HEIGHT - padding * 2;
+
+            // Draw axes
+            chartCtx.strokeStyle = '#444';
+            chartCtx.lineWidth = 1;
+            chartCtx.beginPath();
+            chartCtx.moveTo(padding, padding);
+            chartCtx.lineTo(padding, CHART_HEIGHT - padding);
+            chartCtx.lineTo(CHART_WIDTH - padding, CHART_HEIGHT - padding);
+            chartCtx.stroke();
+
+            // Draw labels
+            chartCtx.fillStyle = '#888';
+            chartCtx.font = '12px sans-serif';
+            chartCtx.textAlign = 'center';
+            chartCtx.fillText('Avalanche Size', CHART_WIDTH / 2, CHART_HEIGHT - 10);
+
+            chartCtx.save();
+            chartCtx.translate(15, CHART_HEIGHT / 2);
+            chartCtx.rotate(-Math.PI / 2);
+            chartCtx.fillText('Frequency', 0, 0);
+            chartCtx.restore();
+
+            // Plot points
+            chartCtx.fillStyle = '#f4a261';
+            for (let i = 0; i < sizes.length; i++) {
+                const logS = Math.log10(sizes[i]);
+                const logF = Math.log10(frequencies[i]);
+
+                const x = padding + ((logS - logMinSize) / (logMaxSize - logMinSize || 1)) * chartW;
+                const y = CHART_HEIGHT - padding - ((logF - logMinFreq) / (logMaxFreq - logMinFreq || 1)) * chartH;
+
+                chartCtx.beginPath();
+                chartCtx.arc(x, y, 3, 0, Math.PI * 2);
+                chartCtx.fill();
+            }
+
+            // Draw reference line (power law slope ~ -1)
+            if (maxSize > minSize) {
+                chartCtx.strokeStyle = '#ff6b6b44';
+                chartCtx.lineWidth = 2;
+                chartCtx.beginPath();
+                const x1 = padding;
+                const y1 = padding + chartH * 0.1;
+                const x2 = CHART_WIDTH - padding;
+                const y2 = CHART_HEIGHT - padding - chartH * 0.1;
+                chartCtx.moveTo(x1, y1);
+                chartCtx.lineTo(x2, y2);
+                chartCtx.stroke();
+            }
+        }
+
+        // Update stats
+        function updateStats() {
+            document.getElementById('grains').textContent = totalGrains;
+            document.getElementById('avalanches').textContent = avalancheSizes.length;
+            document.getElementById('largest').textContent = largestAvalanche;
+            document.getElementById('current').textContent = currentAvalancheSize;
+        }
+
+        // Animation loop
+        function animate(timestamp) {
+            if (!paused) {
+                const stepsPerFrame = Math.max(1, Math.floor(stepsPerSecond / 60));
+                for (let i = 0; i < stepsPerFrame; i++) {
+                    simulationStep();
+                }
+                renderGrid();
+                if (avalancheSizes.length % 10 === 0) renderChart();
+                updateStats();
+                lastTime = timestamp;
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // Event listeners
+        document.getElementById('speed').addEventListener('input', (e) => {
+            stepsPerSecond = parseInt(e.target.value);
+            document.getElementById('speedVal').textContent = stepsPerSecond;
+        });
+
+        document.getElementById('dropMode').addEventListener('change', (e) => {
+            dropMode = e.target.value;
+        });
+
+        document.getElementById('reset').addEventListener('click', () => {
+            initGrid();
+            renderGrid();
+            renderChart();
+            updateStats();
+        });
+
+        document.getElementById('pause').addEventListener('click', (e) => {
+            paused = !paused;
+            e.target.textContent = paused ? 'Resume' : 'Pause';
+        });
+
+        // Start
+        initGrid();
+        renderGrid();
+        renderChart();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>

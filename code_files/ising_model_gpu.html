@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ising Model (GPU)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { margin-bottom: 10px; color: #e76f51; }
+        .subtitle { color: #888; margin-bottom: 20px; text-align: center; }
+        .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+        canvas { border: 2px solid #333; }
+        .panel { display: flex; flex-direction: column; align-items: center; }
+        .panel-title { font-size: 14px; color: #aaa; margin-bottom: 5px; }
+        .controls { margin-top: 20px; display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+        .control-group { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        label { font-size: 12px; color: #888; }
+        input[type="range"] { width: 150px; }
+        button { background: #e76f51; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #f4845f; }
+        .stats { margin-top: 15px; font-size: 14px; color: #aaa; }
+        .legend { display: flex; gap: 20px; margin-top: 10px; }
+        .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+        .legend-color { width: 16px; height: 16px; border-radius: 3px; }
+        .gpu-badge { background: #4CAF50; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 10px; }
+        .temp-indicator { font-size: 11px; margin-top: 5px; }
+        .critical { color: #e76f51; font-weight: bold; }
+        .ordered { color: #4ecdc4; }
+        .disordered { color: #ff6b6b; }
+    </style>
+</head>
+<body>
+    <h1>Ising Model <span class="gpu-badge">WebGL GPU</span></h1>
+    <p class="subtitle">Ferromagnetic Phase Transition - Critical Temperature T<sub>c</sub> ≈ 2.269</p>
+
+    <div class="container">
+        <div class="panel">
+            <canvas id="glCanvas"></canvas>
+            <div class="legend">
+                <div class="legend-item"><div class="legend-color" style="background: #1a1a4e;"></div>Spin Down (-1)</div>
+                <div class="legend-item"><div class="legend-color" style="background: #e76f51;"></div>Spin Up (+1)</div>
+            </div>
+        </div>
+        <div class="panel">
+            <div class="panel-title">Domain Size Distribution (log-log)</div>
+            <canvas id="chartCanvas"></canvas>
+        </div>
+    </div>
+
+    <div class="stats">
+        Sweeps: <span id="sweeps">0</span> |
+        Magnetization: <span id="mag">0</span> |
+        Energy: <span id="energy">0</span> |
+        Domains: <span id="domains">0</span> |
+        FPS: <span id="fps">0</span>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Speed: <span id="speedVal">30</span> sweeps/sec</label>
+            <input type="range" id="speed" min="1" max="200" value="30">
+        </div>
+        <div class="control-group">
+            <label>Grid: <span id="sizeVal">300</span></label>
+            <input type="range" id="size" min="100" max="500" step="50" value="300">
+        </div>
+        <div class="control-group">
+            <label>Temperature: <span id="tempVal">2.27</span></label>
+            <input type="range" id="temperature" min="0.5" max="5" step="0.01" value="2.27">
+            <div class="temp-indicator">
+                <span class="ordered">← Ordered</span> | <span class="critical">T<sub>c</sub></span> | <span class="disordered">Disordered →</span>
+            </div>
+        </div>
+        <button id="reset">Reset</button>
+        <button id="pause">Start</button>
+    </div>
+
+    <script>
+        const TC = 2.269;
+
+        // WebGL setup
+        const glCanvas = document.getElementById('glCanvas');
+        let GRID_SIZE = 300;
+        glCanvas.width = GRID_SIZE;
+        glCanvas.height = GRID_SIZE;
+        const gl = glCanvas.getContext('webgl');
+
+        const chartCanvas = document.getElementById('chartCanvas');
+        const chartCtx = chartCanvas.getContext('2d');
+        chartCanvas.width = 350;
+        chartCanvas.height = 300;
+
+        // Shaders
+        const vsSource = `
+            attribute vec2 a_position;
+            attribute float a_spin;
+            uniform vec2 u_resolution;
+            varying float v_spin;
+            void main() {
+                vec2 clipSpace = (a_position / u_resolution) * 2.0 - 1.0;
+                gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+                gl_PointSize = 1.0;
+                v_spin = a_spin;
+            }
+        `;
+        const fsSource = `
+            precision mediump float;
+            varying float v_spin;
+            void main() {
+                vec3 color = v_spin > 0.0 ? vec3(0.91, 0.44, 0.32) : vec3(0.1, 0.1, 0.3);
+                gl_FragColor = vec4(color, 1.0);
+            }
+        `;
+
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            return shader;
+        }
+
+        const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+        const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+        const program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        const posLoc = gl.getAttribLocation(program, 'a_position');
+        const spinLoc = gl.getAttribLocation(program, 'a_spin');
+        const resLoc = gl.getUniformLocation(program, 'u_resolution');
+
+        const posBuf = gl.createBuffer();
+        const spinBuf = gl.createBuffer();
+
+        // State
+        let grid, positions, spinsFloat;
+        let sweeps = 0;
+        let temperature = TC;
+        let paused = true;
+        let stepsPerSecond = 30;
+        let expTable = {};
+        let lastFpsTime = 0, frameCount = 0, fps = 0;
+
+        function updateExpTable() {
+            expTable = {};
+            for (let dE = -8; dE <= 8; dE += 4) {
+                expTable[dE] = Math.exp(-dE / temperature);
+            }
+        }
+
+        function initGrid() {
+            const n = GRID_SIZE * GRID_SIZE;
+            grid = new Int8Array(n);
+            positions = new Float32Array(n * 2);
+            spinsFloat = new Float32Array(n);
+
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    const idx = i * GRID_SIZE + j;
+                    positions[idx * 2] = j + 0.5;
+                    positions[idx * 2 + 1] = i + 0.5;
+                    grid[idx] = Math.random() < 0.5 ? -1 : 1;
+                    spinsFloat[idx] = grid[idx];
+                }
+            }
+            sweeps = 0;
+            updateExpTable();
+        }
+
+        function deltaEnergy(idx) {
+            const i = Math.floor(idx / GRID_SIZE);
+            const j = idx % GRID_SIZE;
+            const spin = grid[idx];
+
+            const top = grid[((i - 1 + GRID_SIZE) % GRID_SIZE) * GRID_SIZE + j];
+            const bottom = grid[((i + 1) % GRID_SIZE) * GRID_SIZE + j];
+            const left = grid[i * GRID_SIZE + ((j - 1 + GRID_SIZE) % GRID_SIZE)];
+            const right = grid[i * GRID_SIZE + ((j + 1) % GRID_SIZE)];
+
+            return 2 * spin * (top + bottom + left + right);
+        }
+
+        function metropolisStep() {
+            const idx = Math.floor(Math.random() * grid.length);
+            const dE = deltaEnergy(idx);
+
+            if (dE <= 0 || Math.random() < expTable[dE]) {
+                grid[idx] *= -1;
+            }
+        }
+
+        function sweep() {
+            const steps = GRID_SIZE * GRID_SIZE;
+            for (let k = 0; k < steps; k++) {
+                metropolisStep();
+            }
+            sweeps++;
+            for (let i = 0; i < grid.length; i++) spinsFloat[i] = grid[i];
+        }
+
+        function getMagnetization() {
+            let sum = 0;
+            for (let i = 0; i < grid.length; i++) sum += grid[i];
+            return sum / grid.length;
+        }
+
+        function getEnergy() {
+            let energy = 0;
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    const idx = i * GRID_SIZE + j;
+                    const spin = grid[idx];
+                    const right = grid[i * GRID_SIZE + ((j + 1) % GRID_SIZE)];
+                    const bottom = grid[((i + 1) % GRID_SIZE) * GRID_SIZE + j];
+                    energy -= spin * (right + bottom);
+                }
+            }
+            return energy / grid.length;
+        }
+
+        function findDomains() {
+            const visited = new Uint8Array(grid.length);
+            const sizes = [];
+
+            for (let start = 0; start < grid.length; start++) {
+                if (visited[start]) continue;
+
+                const targetSpin = grid[start];
+                const stack = [start];
+                let size = 0;
+
+                while (stack.length > 0) {
+                    const idx = stack.pop();
+                    if (visited[idx] || grid[idx] !== targetSpin) continue;
+
+                    visited[idx] = 1;
+                    size++;
+
+                    const i = Math.floor(idx / GRID_SIZE);
+                    const j = idx % GRID_SIZE;
+
+                    stack.push(((i - 1 + GRID_SIZE) % GRID_SIZE) * GRID_SIZE + j);
+                    stack.push(((i + 1) % GRID_SIZE) * GRID_SIZE + j);
+                    stack.push(i * GRID_SIZE + ((j - 1 + GRID_SIZE) % GRID_SIZE));
+                    stack.push(i * GRID_SIZE + ((j + 1) % GRID_SIZE));
+                }
+
+                if (size > 0) sizes.push(size);
+            }
+            return sizes;
+        }
+
+        function render() {
+            gl.viewport(0, 0, GRID_SIZE, GRID_SIZE);
+            gl.clearColor(0.04, 0.04, 0.08, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, spinBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, spinsFloat, gl.DYNAMIC_DRAW);
+            gl.enableVertexAttribArray(spinLoc);
+            gl.vertexAttribPointer(spinLoc, 1, gl.FLOAT, false, 0, 0);
+
+            gl.uniform2f(resLoc, GRID_SIZE, GRID_SIZE);
+            gl.drawArrays(gl.POINTS, 0, GRID_SIZE * GRID_SIZE);
+        }
+
+        let lastDomainSizes = [];
+
+        function renderChart() {
+            const W = chartCanvas.width, H = chartCanvas.height;
+            chartCtx.fillStyle = '#0a0a15';
+            chartCtx.fillRect(0, 0, W, H);
+
+            if (lastDomainSizes.length < 5) {
+                chartCtx.fillStyle = '#666';
+                chartCtx.font = '14px sans-serif';
+                chartCtx.textAlign = 'center';
+                chartCtx.fillText('Computing domains...', W/2, H/2);
+                return;
+            }
+
+            const counts = {};
+            for (const s of lastDomainSizes) counts[s] = (counts[s] || 0) + 1;
+            const sizes = Object.keys(counts).map(Number).sort((a,b) => a-b);
+            const freqs = sizes.map(s => counts[s]);
+
+            const pad = 50;
+            const cw = W - 2*pad, ch = H - 2*pad;
+            const logMinS = Math.log10(Math.max(1, sizes[0]));
+            const logMaxS = Math.log10(sizes[sizes.length-1]);
+            const logMinF = Math.log10(Math.max(1, Math.min(...freqs)));
+            const logMaxF = Math.log10(Math.max(...freqs));
+
+            chartCtx.strokeStyle = '#444';
+            chartCtx.beginPath();
+            chartCtx.moveTo(pad, pad);
+            chartCtx.lineTo(pad, H-pad);
+            chartCtx.lineTo(W-pad, H-pad);
+            chartCtx.stroke();
+
+            chartCtx.fillStyle = '#e76f51';
+            for (let i = 0; i < sizes.length; i++) {
+                const lx = (Math.log10(sizes[i]) - logMinS) / (logMaxS - logMinS || 1);
+                const ly = (Math.log10(freqs[i]) - logMinF) / (logMaxF - logMinF || 1);
+                const x = pad + lx * cw;
+                const y = H - pad - ly * ch;
+                chartCtx.beginPath();
+                chartCtx.arc(x, y, 3, 0, Math.PI*2);
+                chartCtx.fill();
+            }
+
+            chartCtx.fillStyle = '#888';
+            chartCtx.font = '12px sans-serif';
+            chartCtx.textAlign = 'center';
+            chartCtx.fillText('Domain Size (log)', W/2, H-10);
+        }
+
+        function updateStats() {
+            document.getElementById('sweeps').textContent = sweeps;
+            document.getElementById('mag').textContent = getMagnetization().toFixed(3);
+            document.getElementById('energy').textContent = getEnergy().toFixed(3);
+            document.getElementById('domains').textContent = lastDomainSizes.length;
+            document.getElementById('fps').textContent = fps;
+        }
+
+        function animate(ts) {
+            frameCount++;
+            if (ts - lastFpsTime >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastFpsTime = ts;
+            }
+            if (!paused) {
+                const spf = Math.max(1, Math.floor(stepsPerSecond / 60));
+                for (let i = 0; i < spf; i++) sweep();
+                render();
+                if (sweeps % 10 === 0) {
+                    lastDomainSizes = findDomains();
+                    renderChart();
+                }
+                updateStats();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        document.getElementById('speed').addEventListener('input', e => {
+            stepsPerSecond = parseInt(e.target.value);
+            document.getElementById('speedVal').textContent = stepsPerSecond;
+        });
+        document.getElementById('size').addEventListener('input', e => {
+            GRID_SIZE = parseInt(e.target.value);
+            document.getElementById('sizeVal').textContent = GRID_SIZE;
+            glCanvas.width = GRID_SIZE;
+            glCanvas.height = GRID_SIZE;
+            initGrid();
+            render();
+        });
+        document.getElementById('temperature').addEventListener('input', e => {
+            temperature = parseFloat(e.target.value);
+            document.getElementById('tempVal').textContent = temperature.toFixed(2);
+            updateExpTable();
+        });
+        document.getElementById('reset').addEventListener('click', () => {
+            initGrid();
+            render();
+            lastDomainSizes = [];
+            renderChart();
+            updateStats();
+        });
+        document.getElementById('pause').addEventListener('click', e => {
+            paused = !paused;
+            e.target.textContent = paused ? 'Start' : 'Pause';
+        });
+
+        initGrid();
+        render();
+        updateStats();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ising Model Simulation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        h1 {
+            margin-bottom: 10px;
+            color: #e76f51;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #000;
+        }
+        .chart-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .chart-title {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        label {
+            font-size: 12px;
+            color: #888;
+        }
+        input[type="range"] {
+            width: 150px;
+        }
+        button {
+            background: #e76f51;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #f4845f;
+        }
+        .stats {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+        .temp-indicator {
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .critical { color: #e76f51; font-weight: bold; }
+        .ordered { color: #4ecdc4; }
+        .disordered { color: #ff6b6b; }
+    </style>
+</head>
+<body>
+    <h1>Ising Model Simulation</h1>
+    <p class="subtitle">Ferromagnetic Phase Transition - Critical Temperature T<sub>c</sub> ≈ 2.269<br>
+    Spins flip based on energy change and temperature (Metropolis algorithm)</p>
+
+    <div class="container">
+        <div class="chart-container">
+            <canvas id="gridCanvas"></canvas>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #1a1a4e;"></div>
+                    <span>Spin Down (-1)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #e76f51;"></div>
+                    <span>Spin Up (+1)</span>
+                </div>
+            </div>
+        </div>
+        <div class="chart-container">
+            <div class="chart-title">Domain Size Distribution (log-log)</div>
+            <canvas id="chartCanvas"></canvas>
+        </div>
+    </div>
+
+    <div class="stats">
+        Sweeps: <span id="sweeps">0</span> |
+        Magnetization: <span id="magnetization">0</span> |
+        Energy: <span id="energy">0</span> |
+        Domains: <span id="domains">0</span>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Speed: <span id="speedVal">30</span> sweeps/sec</label>
+            <input type="range" id="speed" min="1" max="500" value="30">
+        </div>
+        <div class="control-group">
+            <label>Temperature: <span id="tempVal">2.27</span></label>
+            <input type="range" id="temperature" min="0.5" max="5" step="0.01" value="2.27">
+            <div class="temp-indicator">
+                <span class="ordered">← Ordered</span> |
+                <span class="critical">T<sub>c</sub></span> |
+                <span class="disordered">Disordered →</span>
+            </div>
+        </div>
+        <button id="reset">Reset</button>
+        <button id="pause">Pause</button>
+    </div>
+
+    <script>
+        // Configuration
+        const GRID_SIZE = 200;
+        const CELL_SIZE = 3;
+        const CHART_WIDTH = 400;
+        const CHART_HEIGHT = 300;
+        const TC = 2.269; // Critical temperature
+
+        // Colors
+        const COLOR_DOWN = '#1a1a4e';
+        const COLOR_UP = '#e76f51';
+
+        // Canvas setup
+        const gridCanvas = document.getElementById('gridCanvas');
+        const gridCtx = gridCanvas.getContext('2d');
+        gridCanvas.width = GRID_SIZE * CELL_SIZE;
+        gridCanvas.height = GRID_SIZE * CELL_SIZE;
+
+        const chartCanvas = document.getElementById('chartCanvas');
+        const chartCtx = chartCanvas.getContext('2d');
+        chartCanvas.width = CHART_WIDTH;
+        chartCanvas.height = CHART_HEIGHT;
+
+        // Simulation state
+        let grid = [];
+        let temperature = TC;
+        let sweeps = 0;
+        let paused = false;
+        let lastTime = 0;
+        let stepsPerSecond = 30;
+
+        // Precomputed exponentials for Metropolis
+        let expTable = {};
+
+        function updateExpTable() {
+            expTable = {};
+            for (let dE = -8; dE <= 8; dE += 4) {
+                expTable[dE] = Math.exp(-dE / temperature);
+            }
+        }
+
+        // Initialize grid with random spins
+        function initGrid() {
+            grid = [];
+            for (let i = 0; i < GRID_SIZE; i++) {
+                grid[i] = [];
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    grid[i][j] = Math.random() < 0.5 ? -1 : 1;
+                }
+            }
+            sweeps = 0;
+            updateExpTable();
+        }
+
+        // Calculate energy change for flipping spin at (i, j)
+        function deltaEnergy(i, j) {
+            const spin = grid[i][j];
+            const top = grid[(i - 1 + GRID_SIZE) % GRID_SIZE][j];
+            const bottom = grid[(i + 1) % GRID_SIZE][j];
+            const left = grid[i][(j - 1 + GRID_SIZE) % GRID_SIZE];
+            const right = grid[i][(j + 1) % GRID_SIZE];
+            return 2 * spin * (top + bottom + left + right);
+        }
+
+        // Metropolis step - flip random spin if energetically favorable
+        function metropolisStep() {
+            const i = Math.floor(Math.random() * GRID_SIZE);
+            const j = Math.floor(Math.random() * GRID_SIZE);
+            const dE = deltaEnergy(i, j);
+
+            if (dE <= 0 || Math.random() < expTable[dE]) {
+                grid[i][j] *= -1;
+            }
+        }
+
+        // One Monte Carlo sweep (N^2 steps)
+        function sweep() {
+            const steps = GRID_SIZE * GRID_SIZE;
+            for (let k = 0; k < steps; k++) {
+                metropolisStep();
+            }
+            sweeps++;
+        }
+
+        // Calculate magnetization
+        function getMagnetization() {
+            let sum = 0;
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    sum += grid[i][j];
+                }
+            }
+            return sum / (GRID_SIZE * GRID_SIZE);
+        }
+
+        // Calculate total energy
+        function getEnergy() {
+            let energy = 0;
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    const spin = grid[i][j];
+                    const right = grid[i][(j + 1) % GRID_SIZE];
+                    const bottom = grid[(i + 1) % GRID_SIZE][j];
+                    energy -= spin * (right + bottom);
+                }
+            }
+            return energy / (GRID_SIZE * GRID_SIZE);
+        }
+
+        // Find domains using flood fill
+        function findDomains() {
+            const visited = [];
+            for (let i = 0; i < GRID_SIZE; i++) {
+                visited[i] = new Array(GRID_SIZE).fill(false);
+            }
+
+            const sizes = [];
+
+            function floodFill(startI, startJ, targetSpin) {
+                const stack = [[startI, startJ]];
+                let size = 0;
+
+                while (stack.length > 0) {
+                    const [i, j] = stack.pop();
+                    if (visited[i][j] || grid[i][j] !== targetSpin) continue;
+
+                    visited[i][j] = true;
+                    size++;
+
+                    // 4-connected neighbors with periodic boundaries
+                    stack.push([(i - 1 + GRID_SIZE) % GRID_SIZE, j]);
+                    stack.push([(i + 1) % GRID_SIZE, j]);
+                    stack.push([i, (j - 1 + GRID_SIZE) % GRID_SIZE]);
+                    stack.push([i, (j + 1) % GRID_SIZE]);
+                }
+
+                return size;
+            }
+
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    if (!visited[i][j]) {
+                        const size = floodFill(i, j, grid[i][j]);
+                        if (size > 0) sizes.push(size);
+                    }
+                }
+            }
+
+            return sizes;
+        }
+
+        // Render grid
+        function renderGrid() {
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    gridCtx.fillStyle = grid[i][j] === 1 ? COLOR_UP : COLOR_DOWN;
+                    gridCtx.fillRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                }
+            }
+        }
+
+        // Render domain size distribution
+        function renderChart() {
+            chartCtx.fillStyle = '#0a0a15';
+            chartCtx.fillRect(0, 0, CHART_WIDTH, CHART_HEIGHT);
+
+            const domainSizes = findDomains();
+
+            if (domainSizes.length < 5) {
+                chartCtx.fillStyle = '#666';
+                chartCtx.font = '14px sans-serif';
+                chartCtx.textAlign = 'center';
+                chartCtx.fillText('Computing domains...', CHART_WIDTH / 2, CHART_HEIGHT / 2);
+                return;
+            }
+
+            // Count frequencies
+            const counts = {};
+            for (const size of domainSizes) {
+                counts[size] = (counts[size] || 0) + 1;
+            }
+
+            const sizes = Object.keys(counts).map(Number).sort((a, b) => a - b);
+            const frequencies = sizes.map(s => counts[s]);
+
+            if (sizes.length === 0) return;
+
+            // Log scale bounds
+            const minSize = Math.max(1, Math.min(...sizes));
+            const maxSize = Math.max(...sizes);
+            const minFreq = Math.max(1, Math.min(...frequencies));
+            const maxFreq = Math.max(...frequencies);
+
+            const logMinSize = Math.log10(minSize);
+            const logMaxSize = Math.log10(maxSize);
+            const logMinFreq = Math.log10(minFreq);
+            const logMaxFreq = Math.log10(maxFreq);
+
+            const padding = 50;
+            const chartW = CHART_WIDTH - padding * 2;
+            const chartH = CHART_HEIGHT - padding * 2;
+
+            // Draw axes
+            chartCtx.strokeStyle = '#444';
+            chartCtx.lineWidth = 1;
+            chartCtx.beginPath();
+            chartCtx.moveTo(padding, padding);
+            chartCtx.lineTo(padding, CHART_HEIGHT - padding);
+            chartCtx.lineTo(CHART_WIDTH - padding, CHART_HEIGHT - padding);
+            chartCtx.stroke();
+
+            // Draw labels
+            chartCtx.fillStyle = '#888';
+            chartCtx.font = '12px sans-serif';
+            chartCtx.textAlign = 'center';
+            chartCtx.fillText('Domain Size', CHART_WIDTH / 2, CHART_HEIGHT - 10);
+
+            chartCtx.save();
+            chartCtx.translate(15, CHART_HEIGHT / 2);
+            chartCtx.rotate(-Math.PI / 2);
+            chartCtx.fillText('Frequency', 0, 0);
+            chartCtx.restore();
+
+            // Plot points
+            chartCtx.fillStyle = '#e76f51';
+            for (let i = 0; i < sizes.length; i++) {
+                const logS = Math.log10(sizes[i]);
+                const logF = Math.log10(frequencies[i]);
+
+                const x = padding + ((logS - logMinSize) / (logMaxSize - logMinSize || 1)) * chartW;
+                const y = CHART_HEIGHT - padding - ((logF - logMinFreq) / (logMaxFreq - logMinFreq || 1)) * chartH;
+
+                chartCtx.beginPath();
+                chartCtx.arc(x, y, 3, 0, Math.PI * 2);
+                chartCtx.fill();
+            }
+
+            // Update domain count
+            document.getElementById('domains').textContent = domainSizes.length;
+        }
+
+        // Update stats
+        function updateStats() {
+            document.getElementById('sweeps').textContent = sweeps;
+            document.getElementById('magnetization').textContent = getMagnetization().toFixed(3);
+            document.getElementById('energy').textContent = getEnergy().toFixed(3);
+        }
+
+        // Animation loop
+        function animate(timestamp) {
+            if (!paused) {
+                const stepsPerFrame = Math.max(1, Math.floor(stepsPerSecond / 60));
+                for (let i = 0; i < stepsPerFrame; i++) {
+                    sweep();
+                }
+                renderGrid();
+                if (sweeps % 5 === 0) renderChart();
+                updateStats();
+                lastTime = timestamp;
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // Event listeners
+        document.getElementById('speed').addEventListener('input', (e) => {
+            stepsPerSecond = parseInt(e.target.value);
+            document.getElementById('speedVal').textContent = stepsPerSecond;
+        });
+
+        document.getElementById('temperature').addEventListener('input', (e) => {
+            temperature = parseFloat(e.target.value);
+            document.getElementById('tempVal').textContent = temperature.toFixed(2);
+            updateExpTable();
+        });
+
+        document.getElementById('reset').addEventListener('click', () => {
+            initGrid();
+            renderGrid();
+            renderChart();
+            updateStats();
+        });
+
+        document.getElementById('pause').addEventListener('click', (e) => {
+            paused = !paused;
+            e.target.textContent = paused ? 'Resume' : 'Pause';
+        });
+
+        // Start
+        initGrid();
+        renderGrid();
+        renderChart();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
