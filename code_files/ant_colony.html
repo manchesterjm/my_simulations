@@ -586,6 +586,34 @@ INTERACTIVITY:
             numNodes = actualNodes;
             document.getElementById('sourceNode').max = numNodes - 1;
             document.getElementById('destNode').max = numNodes - 1;
+
+            // Randomly select source and destination at least 10 nodes apart
+            selectRandomEndpoints();
+        }
+
+        function selectRandomEndpoints() {
+            const minDistance = 10;  // Minimum node ID difference
+            let attempts = 0;
+            const maxAttempts = 100;
+
+            do {
+                source = Math.floor(Math.random() * numNodes);
+                destination = Math.floor(Math.random() * numNodes);
+                attempts++;
+            } while (
+                (Math.abs(destination - source) < minDistance || source === destination)
+                && attempts < maxAttempts
+            );
+
+            // Fallback: put them at opposite corners if random selection fails
+            if (Math.abs(destination - source) < minDistance) {
+                source = 0;
+                destination = numNodes - 1;
+            }
+
+            // Update the input fields
+            document.getElementById('sourceNode').value = source;
+            document.getElementById('destNode').value = destination;
         }
 
         function distance(u, v) {
@@ -864,9 +892,8 @@ INTERACTIVITY:
             }
 
             numNodes = parseInt(document.getElementById('numNodes').value);
-            source = parseInt(document.getElementById('sourceNode').value);
-            destination = parseInt(document.getElementById('destNode').value);
 
+            // generateGraph() will select random source/destination
             generateGraph();
             dijkstra();
             resetACO();
