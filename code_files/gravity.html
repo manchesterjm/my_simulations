@@ -584,7 +584,6 @@
 
         function handleCollisions() {
             const toRemove = new Set();
-            const toAdd = [];
 
             // Calculate collision radius to match visual representation
             // Visual radius in pixels: Math.max(4, Math.min(20, (radius/scale)*canvas.width*500))
@@ -605,27 +604,44 @@
                     const combinedRadius = (visualRadius1 + visualRadius2) * pixelToSim;
 
                     if (dist < combinedRadius) {
-                        // Merge
-                        const totalMass = p1.mass + p2.mass;
-                        const newX = (p1.mass * p1.x + p2.mass * p2.x) / totalMass;
-                        const newY = (p1.mass * p1.y + p2.mass * p2.y) / totalMass;
-                        const newVx = (p1.mass * p1.vx + p2.mass * p2.vx) / totalMass;
-                        const newVy = (p1.mass * p1.vy + p2.mass * p2.vy) / totalMass;
-                        const newRadius = Math.pow(p1.radius * p1.radius * p1.radius +
-                                                   p2.radius * p2.radius * p2.radius, 1/3);
+                        // Elastic collision - planets bounce off each other
+                        const m1 = p1.mass;
+                        const m2 = p2.mass;
 
-                        const merged = new Body(
-                            totalMass, newX, newY, newVx, newVy,
-                            newRadius, p1.mass > p2.mass ? p1.color : p2.color,
-                            `${p1.name}+${p2.name}`
-                        );
+                        // Normal vector from p1 to p2
+                        const nx = (p2.x - p1.x) / dist;
+                        const ny = (p2.y - p1.y) / dist;
 
-                        toRemove.add(i);
-                        toRemove.add(j);
-                        toAdd.push(merged);
-                        collisions++;
+                        // Relative velocity
+                        const dvx = p1.vx - p2.vx;
+                        const dvy = p1.vy - p2.vy;
 
-                        logEvent(`Collision: ${p1.name} + ${p2.name}`, 'collision');
+                        // Relative velocity along collision normal
+                        const dvn = dvx * nx + dvy * ny;
+
+                        // Only collide if objects are approaching
+                        if (dvn > 0) {
+                            // Elastic collision impulse
+                            const impulse = (2 * dvn) / (m1 + m2);
+
+                            // Update velocities
+                            p1.vx -= impulse * m2 * nx;
+                            p1.vy -= impulse * m2 * ny;
+                            p2.vx += impulse * m1 * nx;
+                            p2.vy += impulse * m1 * ny;
+
+                            // Separate planets so they don't overlap
+                            const overlap = combinedRadius - dist;
+                            const separationRatio1 = m2 / (m1 + m2);
+                            const separationRatio2 = m1 / (m1 + m2);
+                            p1.x -= overlap * separationRatio1 * nx;
+                            p1.y -= overlap * separationRatio1 * ny;
+                            p2.x += overlap * separationRatio2 * nx;
+                            p2.y += overlap * separationRatio2 * ny;
+
+                            collisions++;
+                            logEvent(`Bounce: ${p1.name} <-> ${p2.name}`, 'collision');
+                        }
                     }
                 }
             }
@@ -643,7 +659,6 @@
             }
 
             planets = planets.filter((_, i) => !toRemove.has(i));
-            planets.push(...toAdd);
 
             if (toRemove.size > 0) {
                 updatePlanetList();
