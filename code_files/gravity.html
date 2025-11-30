@@ -282,7 +282,9 @@
                     <h3>Simulation Controls</h3>
                     <button id="startStop" class="btn-primary">Start</button>
                     <button id="reset" class="btn-secondary">Reset</button>
-                    <button id="addRandom" class="btn-secondary">Add Random Planet</button>
+                    <button id="addRandom" class="btn-secondary">Add Planet</button>
+                    <button id="addAsteroid" class="btn-secondary">Add Asteroid</button>
+                    <button id="addComet" class="btn-secondary">Add Comet</button>
                 </div>
 
                 <div class="control-section">
@@ -470,6 +472,8 @@
             document.getElementById('startStop').addEventListener('click', toggleSimulation);
             document.getElementById('reset').addEventListener('click', resetSimulation);
             document.getElementById('addRandom').addEventListener('click', addRandomPlanet);
+            document.getElementById('addAsteroid').addEventListener('click', addAsteroid);
+            document.getElementById('addComet').addEventListener('click', addComet);
             document.getElementById('boostSpeed').addEventListener('click', () => modifySpeed(1.5));
             document.getElementById('reduceSpeed').addEventListener('click', () => modifySpeed(0.7));
             document.getElementById('deletePlanet').addEventListener('click', deleteSelectedPlanet);
@@ -602,6 +606,68 @@
             const name = `Planet ${planets.length + 1}`;
 
             planets.push(new Body(mass, x, y, vx, vy, radius, color, name));
+            updatePlanetList();
+        }
+
+        function addAsteroid() {
+            // Asteroids: small, rocky, mostly circular orbits in asteroid belt region
+            const minOrbit = 0.4 * AU;
+            const maxOrbit = 0.8 * AU;
+            const distance = minOrbit + Math.random() * (maxOrbit - minOrbit);
+            const angle = Math.random() * 2 * Math.PI;
+
+            const x = distance * Math.cos(angle);
+            const y = distance * Math.sin(angle);
+
+            // Slightly elliptical orbit (velocity factor 0.9-1.1)
+            const velocityFactor = 0.95 + Math.random() * 0.1;
+            const vOrb = Math.sqrt(G * star.mass / distance) * velocityFactor;
+            const vx = -vOrb * Math.sin(angle);
+            const vy = vOrb * Math.cos(angle);
+
+            // Small mass and radius
+            const mass = 1e15 + Math.random() * 1e18;
+            const radius = 1e4 + Math.random() * 1e5;
+
+            // Gray/brown colors for rocky asteroids
+            const asteroidColors = ['#8b8b8b', '#6b6b6b', '#8b7355', '#a0926c', '#707070'];
+            const color = asteroidColors[Math.floor(Math.random() * asteroidColors.length)];
+            const name = `Asteroid ${planets.length + 1}`;
+
+            const asteroid = new Body(mass, x, y, vx, vy, radius, color, name);
+            asteroid.type = 'asteroid';
+            planets.push(asteroid);
+            updatePlanetList();
+        }
+
+        function addComet() {
+            // Comets: small, icy, highly elliptical orbits from outer system
+            const distance = (2 + Math.random() * 2) * AU;  // Start from outer system
+            const angle = Math.random() * 2 * Math.PI;
+
+            const x = distance * Math.cos(angle);
+            const y = distance * Math.sin(angle);
+
+            // Highly elliptical orbit - velocity pointing somewhat inward
+            const vOrb = Math.sqrt(G * star.mass / distance);
+            // Add velocity component toward star for elliptical orbit
+            const inwardAngle = angle + Math.PI + (Math.random() - 0.5) * 0.5;
+            const ellipticalBoost = 0.3 + Math.random() * 0.4;
+            const vx = -vOrb * Math.sin(angle) + vOrb * ellipticalBoost * Math.cos(inwardAngle);
+            const vy = vOrb * Math.cos(angle) + vOrb * ellipticalBoost * Math.sin(inwardAngle);
+
+            // Small mass and radius
+            const mass = 1e12 + Math.random() * 1e15;
+            const radius = 1e3 + Math.random() * 1e4;
+
+            // Icy blue/cyan colors
+            const cometColors = ['#00ffff', '#87ceeb', '#b0e0e6', '#add8e6', '#e0ffff'];
+            const color = cometColors[Math.floor(Math.random() * cometColors.length)];
+            const name = `Comet ${planets.length + 1}`;
+
+            const comet = new Body(mass, x, y, vx, vy, radius, color, name);
+            comet.type = 'comet';
+            planets.push(comet);
             updatePlanetList();
         }
 
@@ -957,6 +1023,37 @@
                 // Planet size (exaggerated for visibility)
                 const planetRadius = Math.max(4, Math.min(20,
                     (planet.radius / scale) * canvas.width * 500));
+
+                // Draw comet tail (pointing away from star)
+                if (planet.type === 'comet') {
+                    const distToStar = Math.sqrt(planet.x * planet.x + planet.y * planet.y);
+                    // Tail gets longer when closer to star
+                    const tailLength = Math.max(20, Math.min(100, (AU / distToStar) * 50));
+
+                    // Direction away from star
+                    const tailDirX = planet.x / distToStar;
+                    const tailDirY = planet.y / distToStar;
+
+                    // Draw tail as gradient triangle
+                    const tailEndX = px + tailDirX * tailLength;
+                    const tailEndY = py + tailDirY * tailLength;
+
+                    // Perpendicular for tail width
+                    const perpX = -tailDirY * planetRadius;
+                    const perpY = tailDirX * planetRadius;
+
+                    ctx.beginPath();
+                    ctx.moveTo(px - perpX, py - perpY);
+                    ctx.lineTo(px + perpX, py + perpY);
+                    ctx.lineTo(tailEndX, tailEndY);
+                    ctx.closePath();
+
+                    const tailGradient = ctx.createLinearGradient(px, py, tailEndX, tailEndY);
+                    tailGradient.addColorStop(0, planet.color + 'aa');
+                    tailGradient.addColorStop(1, planet.color + '00');
+                    ctx.fillStyle = tailGradient;
+                    ctx.fill();
+                }
 
                 ctx.beginPath();
                 ctx.arc(px, py, planetRadius, 0, Math.PI * 2);
