@@ -406,6 +406,11 @@ INTERACTIVITY:
         let meanCostHistory = [];
         let pathCounts = {};
 
+        // ===== ANIMATED ANTS =====
+        let activeAnts = [];  // Ants currently moving on the graph
+        let antSpeed = 0.02;  // How fast ants move (0-1 progress per frame)
+        let showAnts = true;  // Whether to show animated ants
+
         // ===== PARAMETERS =====
         let numNodes = 30;
         let numAnts = 50;
@@ -434,12 +439,14 @@ INTERACTIVITY:
             });
 
             document.getElementById('sourceNode').addEventListener('change', (e) => {
-                source = parseInt(e.target.value);
+                source = Math.min(parseInt(e.target.value), numNodes - 1);
+                e.target.value = source;
                 resetACO();
             });
 
             document.getElementById('destNode').addEventListener('change', (e) => {
-                destination = parseInt(e.target.value);
+                destination = Math.min(parseInt(e.target.value), numNodes - 1);
+                e.target.value = destination;
                 resetACO();
             });
 
@@ -722,6 +729,50 @@ INTERACTIVITY:
             }
         }
 
+        // ===== ANIMATED ANT CLASS =====
+        class AnimatedAnt {
+            constructor(path, cost) {
+                this.path = path;
+                this.cost = cost;
+                this.currentSegment = 0;  // Which edge we're on
+                this.progress = 0;        // 0-1 progress along current edge
+                this.finished = false;
+                this.x = 0;
+                this.y = 0;
+                this.updatePosition();
+            }
+
+            updatePosition() {
+                if (this.currentSegment >= this.path.length - 1) {
+                    this.finished = true;
+                    return;
+                }
+
+                const fromNode = this.path[this.currentSegment];
+                const toNode = this.path[this.currentSegment + 1];
+                const p1 = positions[fromNode];
+                const p2 = positions[toNode];
+
+                // Interpolate position
+                this.x = p1.x + (p2.x - p1.x) * this.progress;
+                this.y = p1.y + (p2.y - p1.y) * this.progress;
+            }
+
+            move() {
+                if (this.finished) return;
+
+                this.progress += antSpeed;
+                if (this.progress >= 1) {
+                    this.progress = 0;
+                    this.currentSegment++;
+                    if (this.currentSegment >= this.path.length - 1) {
+                        this.finished = true;
+                    }
+                }
+                this.updatePosition();
+            }
+        }
+
         // ===== ACO ITERATION =====
         function runIteration() {
             const results = [];
@@ -734,6 +785,11 @@ INTERACTIVITY:
                     // Track path
                     const pathKey = ant.path.join('-');
                     pathCounts[pathKey] = (pathCounts[pathKey] || 0) + 1;
+
+                    // Create animated ant for visualization
+                    if (showAnts && activeAnts.length < 50) {  // Limit visible ants
+                        activeAnts.push(new AnimatedAnt(ant.path, ant.pathCost));
+                    }
                 }
             }
 
@@ -773,6 +829,17 @@ INTERACTIVITY:
             updateStats();
         }
 
+        // ===== UPDATE ANIMATED ANTS =====
+        function updateAnts() {
+            // Move all active ants
+            for (const ant of activeAnts) {
+                ant.move();
+            }
+
+            // Remove finished ants
+            activeAnts = activeAnts.filter(ant => !ant.finished);
+        }
+
         // ===== SIMULATION CONTROL =====
         function toggleSimulation() {
             running = !running;
@@ -808,6 +875,8 @@ INTERACTIVITY:
             costHistory = [];
             meanCostHistory = [];
             pathCounts = {};
+            activeAnts = [];  // Clear animated ants
+            frameCount = 0;
 
             // Reinitialize pheromones
             for (const edge of edges) {
@@ -911,6 +980,7 @@ INTERACTIVITY:
             // Draw nodes
             for (let i = 0; i < numNodes; i++) {
                 const p = positions[i];
+                if (!p) continue;
                 const x = padding + p.x * (width - 2 * padding);
                 const y = padding + p.y * (height - 2 * padding);
 
@@ -938,6 +1008,23 @@ INTERACTIVITY:
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(i.toString(), x, y);
+            }
+
+            // Draw animated ants
+            if (showAnts) {
+                for (const ant of activeAnts) {
+                    const x = padding + ant.x * (width - 2 * padding);
+                    const y = padding + ant.y * (height - 2 * padding);
+
+                    // Draw ant as small black dot with yellow outline
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = '#000';
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffcc00';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
             }
         }
 
@@ -1042,12 +1129,20 @@ INTERACTIVITY:
         }
 
         // ===== ANIMATION LOOP =====
+        let frameCount = 0;
+
         function animate() {
             if (!running) return;
 
-            for (let i = 0; i < speed; i++) {
+            frameCount++;
+
+            // Run ACO iteration every few frames (based on speed)
+            if (frameCount % Math.max(1, Math.floor(10 / speed)) === 0) {
                 runIteration();
             }
+
+            // Update animated ants every frame for smooth movement
+            updateAnts();
 
             draw();
             animationId = requestAnimationFrame(animate);
