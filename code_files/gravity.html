@@ -341,6 +341,15 @@
                         <label>Show Trails:</label>
                         <input type="checkbox" id="showTrails" checked>
                     </div>
+                    <div class="control-row">
+                        <label>Zoom:</label>
+                        <div class="slider-with-nudge">
+                            <button class="btn-nudge" id="zoomOut">−</button>
+                            <input type="range" id="zoomScale" min="1" max="100" value="50">
+                            <button class="btn-nudge" id="zoomIn">+</button>
+                        </div>
+                        <span class="value-display" id="zoomValue">3.0 AU</span>
+                    </div>
                 </div>
 
                 <div class="control-section">
@@ -520,6 +529,15 @@
             document.getElementById('timeScaleUp').addEventListener('click', () => nudgeSlider('timeScale', 1));
             document.getElementById('trailLengthDown').addEventListener('click', () => nudgeSlider('trailLength', -10));
             document.getElementById('trailLengthUp').addEventListener('click', () => nudgeSlider('trailLength', 10));
+
+            // Zoom slider (maps 1-100 to 0.5 AU - 10 AU, exponential scale)
+            document.getElementById('zoomScale').addEventListener('input', (e) => {
+                const sliderVal = parseInt(e.target.value);
+                scale = 0.5 * Math.pow(20, sliderVal / 100) * AU;
+                document.getElementById('zoomValue').textContent = (scale / AU).toFixed(1) + ' AU';
+            });
+            document.getElementById('zoomOut').addEventListener('click', () => nudgeSlider('zoomScale', 5));
+            document.getElementById('zoomIn').addEventListener('click', () => nudgeSlider('zoomScale', -5));
 
             canvas.addEventListener('click', onCanvasClick);
 
