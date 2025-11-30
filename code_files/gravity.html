@@ -586,6 +586,11 @@
             const toRemove = new Set();
             const toAdd = [];
 
+            // Calculate collision radius to match visual representation
+            // Visual radius in pixels: Math.max(4, Math.min(20, (radius/scale)*canvas.width*500))
+            // Convert back to simulation units for collision detection
+            const pixelToSim = scale * 2 / canvas.width;
+
             for (let i = 0; i < planets.length; i++) {
                 for (let j = i + 1; j < planets.length; j++) {
                     if (toRemove.has(i) || toRemove.has(j)) continue;
@@ -593,7 +598,11 @@
                     const p1 = planets[i];
                     const p2 = planets[j];
                     const dist = p1.distanceTo(p2);
-                    const combinedRadius = (p1.radius + p2.radius) * 10; // Scaled for visibility
+
+                    // Use visual radius for collision (what user sees)
+                    const visualRadius1 = Math.max(4, Math.min(20, (p1.radius / scale) * canvas.width * 500));
+                    const visualRadius2 = Math.max(4, Math.min(20, (p2.radius / scale) * canvas.width * 500));
+                    const combinedRadius = (visualRadius1 + visualRadius2) * pixelToSim;
 
                     if (dist < combinedRadius) {
                         // Merge
