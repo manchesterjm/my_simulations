@@ -772,6 +772,7 @@
             // Handle collisions and ejections
             handleCollisions();
             checkEjections();
+            checkCaptures();
         }
 
         function handleCollisions() {
@@ -882,6 +883,60 @@
 
             if (toRemove.length > 0) {
                 updatePlanetList();
+            }
+        }
+
+        function checkCaptures() {
+            // Check if asteroids/comets can be captured by planets
+            for (let i = 0; i < planets.length; i++) {
+                const smallBody = planets[i];
+
+                // Only check asteroids and comets that aren't already moons
+                if (!smallBody.type || smallBody.type === 'moon') continue;
+                if (smallBody.type !== 'asteroid' && smallBody.type !== 'comet') continue;
+
+                // Check against each planet (not asteroids/comets)
+                for (let j = 0; j < planets.length; j++) {
+                    if (i === j) continue;
+                    const planet = planets[j];
+
+                    // Skip if target is also a small body
+                    if (planet.type === 'asteroid' || planet.type === 'comet' || planet.type === 'moon') continue;
+
+                    // Calculate Hill sphere radius (simplified)
+                    const planetDist = Math.sqrt(planet.x * planet.x + planet.y * planet.y);
+                    const hillRadius = planetDist * Math.pow(planet.mass / (3 * star.mass), 1/3);
+
+                    // Distance between small body and planet
+                    const dx = smallBody.x - planet.x;
+                    const dy = smallBody.y - planet.y;
+                    const distToPlanet = Math.sqrt(dx * dx + dy * dy);
+
+                    // Check if within Hill sphere
+                    if (distToPlanet < hillRadius * 0.5) {  // Use 50% of Hill sphere for stability
+                        // Calculate relative velocity
+                        const relVx = smallBody.vx - planet.vx;
+                        const relVy = smallBody.vy - planet.vy;
+                        const relSpeed = Math.sqrt(relVx * relVx + relVy * relVy);
+
+                        // Escape velocity from planet at this distance
+                        const escapeVel = Math.sqrt(2 * G * planet.mass / distToPlanet);
+
+                        // Capture if relative velocity is less than escape velocity
+                        if (relSpeed < escapeVel * 0.8) {
+                            // Captured! Convert to moon
+                            const oldType = smallBody.type;
+                            smallBody.type = 'moon';
+                            smallBody.parentPlanet = planet.name;
+                            smallBody.name = `${planet.name}'s moon`;
+                            smallBody.color = '#aaaaaa';  // Gray for moons
+
+                            logEvent(`${oldType} captured by ${planet.name}!`, 'collision');
+                            updatePlanetList();
+                            break;  // Only capture by one planet
+                        }
+                    }
+                }
             }
         }
 
