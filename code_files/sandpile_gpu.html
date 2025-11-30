@@ -1,3 +1,23 @@
+<!--
+    ABELIAN SANDPILE SIMULATION (GPU-ACCELERATED)
+    ==============================================
+    Classic self-organized criticality model. Drop sand grains on a grid; when a cell
+    reaches threshold (4), it topples and distributes grains to neighbors. Avalanche
+    sizes follow a power law distribution.
+
+    Key Features:
+    - WebGL GPU rendering for smooth visualization of large grids (up to 600x600)
+    - Real-time avalanche size distribution in log-log plot
+    - Adjustable parameters: grid size, drop speed, drop mode (center vs random)
+    - Color-coded visualization showing grain count per cell
+    - Manual grain dropping for experimentation
+
+    Physics:
+    - Abelian group property: order of grain drops doesn't affect final state
+    - Self-organized criticality: system evolves to critical state without tuning
+    - Power law: P(avalanche size = s) ~ s^(-τ) with τ ≈ 1.27 (2D)
+    - Scale invariance: avalanches occur at all scales
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +25,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sandpile (GPU)</title>
     <style>
+        /* ===== GLOBAL & LAYOUT STYLES ===== */
+        /* Dark theme with sand/earth color scheme */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #1a1a2e;
@@ -35,12 +57,16 @@
     </style>
 </head>
 <body>
+    <!-- ===== PAGE HEADER ===== -->
     <h1>Sandpile Avalanche <span class="gpu-badge">WebGL GPU</span></h1>
     <p class="subtitle">Abelian Sandpile Model - Self-Organized Criticality<br>Cells topple at 4 grains, distributing to neighbors</p>
 
+    <!-- ===== VISUALIZATION CONTAINERS ===== -->
+    <!-- Left: Sandpile grid (WebGL), Right: Avalanche distribution (2D canvas) -->
     <div class="container">
         <div class="panel">
             <canvas id="glCanvas"></canvas>
+            <!-- Color legend showing grain counts (0-4+) -->
             <div class="legend">
                 <div class="legend-item"><div class="legend-color" style="background: #2d1f0f;"></div>0</div>
                 <div class="legend-item"><div class="legend-color" style="background: #5c3d1e;"></div>1</div>
@@ -85,7 +111,8 @@
     </div>
 
     <script>
-        // WebGL setup
+        // ===== WEBGL SETUP =====
+        // GPU rendering for fast visualization of large sandpile grids
         const glCanvas = document.getElementById('glCanvas');
         let GRID_SIZE = 300;
         glCanvas.width = 500;
@@ -97,16 +124,17 @@
         chartCanvas.width = 350;
         chartCanvas.height = 300;
 
-        // Shaders
+        // ===== WEBGL SHADERS =====
+        // Render each cell as a colored point based on grain count (0-4+)
         const vsSource = `
-            attribute vec2 a_position;
-            attribute float a_grains;
-            uniform vec2 u_resolution;
-            varying float v_grains;
+            attribute vec2 a_position;      // Cell position in grid
+            attribute float a_grains;        // Number of grains (0-4+)
+            uniform vec2 u_resolution;       // Canvas dimensions
+            varying float v_grains;          // Pass to fragment shader
             void main() {
                 vec2 clipSpace = (a_position / u_resolution) * 2.0 - 1.0;
                 gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
-                gl_PointSize = max(1.0, u_resolution.x / 300.0);
+                gl_PointSize = max(1.0, u_resolution.x / 300.0);  // Scale point size with grid
                 v_grains = a_grains;
             }
         `;
@@ -114,6 +142,7 @@
             precision mediump float;
             varying float v_grains;
             void main() {
+                // Color gradient: dark brown (0) → light tan (3) → red (4+)
                 vec3 color;
                 if (v_grains < 0.5) color = vec3(0.18, 0.12, 0.06);
                 else if (v_grains < 1.5) color = vec3(0.36, 0.24, 0.12);
@@ -146,7 +175,9 @@
         const posBuf = gl.createBuffer();
         const grainsBuf = gl.createBuffer();
 
-        // State
+        // ===== SIMULATION STATE =====
+        // Grid: Uint8Array of grain counts
+        // Avalanche tracking: sizes, current size, toppling state
         let grid, positions, grainsFloat;
         let totalGrains = 0;
         let avalancheSizes = [];
@@ -155,15 +186,18 @@
         let isToppling = false;
         let paused = true;
         let stepsPerSecond = 60;
-        let dropMode = 'random';
+        let dropMode = 'random';  // 'random' or 'center'
         let lastFpsTime = 0, frameCount = 0, fps = 0;
 
+        // ===== INITIALIZATION =====
+        // Start with empty grid
         function initGrid() {
             const n = GRID_SIZE * GRID_SIZE;
             grid = new Uint8Array(n);
             positions = new Float32Array(n * 2);
             grainsFloat = new Float32Array(n);
 
+            // Precompute positions for WebGL (scaled to 500x500 canvas)
             for (let i = 0; i < GRID_SIZE; i++) {
                 for (let j = 0; j < GRID_SIZE; j++) {
                     const idx = i * GRID_SIZE + j;
@@ -180,12 +214,14 @@
             isToppling = false;
         }
 
+        // ===== SIMULATION LOGIC =====
+        // Drop a single grain at center or random location
         function dropGrain() {
             let i, j;
-            if (dropMode === 'center') {
+            if (dropMode === 'center') {  // Central pile creates fractal patterns
                 i = Math.floor(GRID_SIZE / 2);
                 j = Math.floor(GRID_SIZE / 2);
-            } else {
+            } else {  // Random drops create steady-state critical behavior
                 i = Math.floor(Math.random() * GRID_SIZE);
                 j = Math.floor(Math.random() * GRID_SIZE);
             }
@@ -194,28 +230,34 @@
             totalGrains++;
         }
 
+        // Toppling step: cells with ≥4 grains distribute to 4 neighbors
+        // Returns true if any cells toppled
         function toppleStep() {
+            // Find all cells that need to topple
             const toTopple = [];
             for (let idx = 0; idx < grid.length; idx++) {
-                if (grid[idx] >= 4) toTopple.push(idx);
+                if (grid[idx] >= 4) toTopple.push(idx);  // Threshold = 4
             }
 
-            if (toTopple.length === 0) return false;
+            if (toTopple.length === 0) return false;  // Avalanche ended
 
+            // Simultaneous toppling (Abelian property)
             for (const idx of toTopple) {
                 const i = Math.floor(idx / GRID_SIZE);
                 const j = idx % GRID_SIZE;
-                grid[idx] -= 4;
-                currentAvalanche++;
+                grid[idx] -= 4;  // Lose 4 grains
+                currentAvalanche++;  // Count toppling event
 
+                // Distribute 1 grain to each of 4 neighbors (if they exist)
                 if (i > 0) grid[(i-1) * GRID_SIZE + j]++;
                 if (i < GRID_SIZE - 1) grid[(i+1) * GRID_SIZE + j]++;
                 if (j > 0) grid[i * GRID_SIZE + (j-1)]++;
                 if (j < GRID_SIZE - 1) grid[i * GRID_SIZE + (j+1)]++;
             }
-            return true;
+            return true;  // More toppling may be needed
         }
 
+        // Check if any cell needs toppling
         function needsToppling() {
             for (let i = 0; i < grid.length; i++) {
                 if (grid[i] >= 4) return true;
@@ -223,22 +265,24 @@
             return false;
         }
 
+        // Main simulation step: either propagate avalanche or drop new grain
         function simulationStep() {
-            if (isToppling) {
-                if (!toppleStep()) {
+            if (isToppling) {  // Avalanche in progress
+                if (!toppleStep()) {  // Avalanche finished
                     isToppling = false;
-                    if (currentAvalanche > 0) {
+                    if (currentAvalanche > 0) {  // Record avalanche size
                         avalancheSizes.push(currentAvalanche);
                         if (currentAvalanche > largestAvalanche) largestAvalanche = currentAvalanche;
                     }
                     currentAvalanche = 0;
                 }
-            } else {
+            } else {  // No avalanche: drop new grain
                 dropGrain();
                 if (needsToppling()) {
                     isToppling = true;
                 }
             }
+            // Sync float array for GPU upload
             for (let i = 0; i < grid.length; i++) grainsFloat[i] = grid[i];
         }
 
@@ -261,6 +305,7 @@
             gl.drawArrays(gl.POINTS, 0, GRID_SIZE * GRID_SIZE);
         }
 
+        // Draw log-log plot of avalanche size distribution (power law check)
         function renderChart() {
             const W = chartCanvas.width, H = chartCanvas.height;
             chartCtx.fillStyle = '#0a0a15';
@@ -274,6 +319,7 @@
                 return;
             }
 
+            // Bin avalanche sizes and count frequencies
             const counts = {};
             for (const s of avalancheSizes) counts[s] = (counts[s] || 0) + 1;
             const sizes = Object.keys(counts).map(Number).sort((a,b) => a-b);
@@ -281,6 +327,7 @@
 
             const pad = 50;
             const cw = W - 2*pad, ch = H - 2*pad;
+            // Log-log scale for power law visualization
             const logMinS = Math.log10(Math.max(1, sizes[0]));
             const logMaxS = Math.log10(sizes[sizes.length-1]);
             const logMinF = Math.log10(Math.max(1, Math.min(...freqs)));
@@ -318,6 +365,7 @@
             document.getElementById('fps').textContent = fps;
         }
 
+        // ===== ANIMATION LOOP =====
         function animate(ts) {
             frameCount++;
             if (ts - lastFpsTime >= 1000) {
@@ -326,7 +374,7 @@
                 lastFpsTime = ts;
             }
             if (!paused) {
-                const spf = Math.max(1, Math.floor(stepsPerSecond / 60));
+                const spf = Math.max(1, Math.floor(stepsPerSecond / 60));  // Steps per frame
                 for (let i = 0; i < spf; i++) simulationStep();
                 render();
                 if (avalancheSizes.length % 20 === 0) renderChart();
@@ -335,6 +383,7 @@
             requestAnimationFrame(animate);
         }
 
+        // ===== EVENT LISTENERS =====
         document.getElementById('speed').addEventListener('input', e => {
             stepsPerSecond = parseInt(e.target.value);
             document.getElementById('speedVal').textContent = stepsPerSecond;
@@ -345,9 +394,11 @@
             initGrid();
             render();
         });
+        // Switch between center and random drop modes
         document.getElementById('dropMode').addEventListener('change', e => {
             dropMode = e.target.value;
         });
+        // Manual bulk grain drop
         document.getElementById('drop100').addEventListener('click', () => {
             for (let i = 0; i < 100; i++) dropGrain();
             for (let i = 0; i < grid.length; i++) grainsFloat[i] = grid[i];
@@ -365,6 +416,7 @@
             e.target.textContent = paused ? 'Start' : 'Pause';
         });
 
+        // ===== INITIALIZATION =====
         initGrid();
         render();
         updateStats();

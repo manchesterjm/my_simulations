@@ -1,3 +1,24 @@
+<!--
+    ISING MODEL SIMULATION (GPU-ACCELERATED)
+    =========================================
+    Simulates ferromagnetic phase transition at critical temperature Tc ≈ 2.269.
+    Uses Metropolis algorithm to evolve spins according to thermal fluctuations.
+
+    Key Features:
+    - WebGL GPU rendering for smooth visualization of large grids (up to 500x500)
+    - Metropolis-Hastings Monte Carlo algorithm for spin flips
+    - Real-time domain size distribution showing power law at criticality
+    - Temperature control: ordered (T < Tc), critical (T ≈ Tc), disordered (T > Tc)
+    - Live magnetization and energy measurements
+
+    Physics:
+    - 2D Ising model: grid of spins (±1) with nearest-neighbor interactions
+    - Hamiltonian: H = -J Σ s_i s_j (ferromagnetic coupling)
+    - Critical point: T_c ≈ 2.269 (2D square lattice, exact solution)
+    - At T < T_c: spontaneous magnetization (ordered phase)
+    - At T > T_c: random spins (paramagnetic phase)
+    - At T ≈ T_c: scale-free domain fluctuations (critical phenomena)
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +26,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ising Model (GPU)</title>
     <style>
+        /* ===== GLOBAL & LAYOUT STYLES ===== */
+        /* Dark theme with orange accent matching spin-up color */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #1a1a2e;
@@ -33,15 +56,19 @@
         .legend-color { width: 16px; height: 16px; border-radius: 3px; }
         .gpu-badge { background: #4CAF50; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 10px; }
         .temp-indicator { font-size: 11px; margin-top: 5px; }
-        .critical { color: #e76f51; font-weight: bold; }
-        .ordered { color: #4ecdc4; }
-        .disordered { color: #ff6b6b; }
+        /* Color-coded temperature states relative to Tc */
+        .critical { color: #e76f51; font-weight: bold; }  /* At critical point */
+        .ordered { color: #4ecdc4; }                       /* Below Tc: ordered */
+        .disordered { color: #ff6b6b; }                    /* Above Tc: disordered */
     </style>
 </head>
 <body>
+    <!-- ===== PAGE HEADER ===== -->
     <h1>Ising Model <span class="gpu-badge">WebGL GPU</span></h1>
     <p class="subtitle">Ferromagnetic Phase Transition - Critical Temperature T<sub>c</sub> ≈ 2.269</p>
 
+    <!-- ===== VISUALIZATION CONTAINERS ===== -->
+    <!-- Left: Spin grid (WebGL), Right: Domain size distribution (2D canvas) -->
     <div class="container">
         <div class="panel">
             <canvas id="glCanvas"></canvas>
@@ -85,9 +112,12 @@
     </div>
 
     <script>
+        // ===== PHYSICS CONSTANTS =====
+        // Critical temperature for 2D Ising model (exact solution)
         const TC = 2.269;
 
-        // WebGL setup
+        // ===== WEBGL SETUP =====
+        // GPU rendering for fast visualization of spin lattice
         const glCanvas = document.getElementById('glCanvas');
         let GRID_SIZE = 300;
         glCanvas.width = GRID_SIZE;
@@ -99,7 +129,8 @@
         chartCanvas.width = 350;
         chartCanvas.height = 300;
 
-        // Shaders
+        // ===== WEBGL SHADERS =====
+        // Simple point rendering: blue for spin down (-1), orange for spin up (+1)
         const vsSource = `
             attribute vec2 a_position;
             attribute float a_spin;
@@ -116,6 +147,7 @@
             precision mediump float;
             varying float v_spin;
             void main() {
+                // Orange for +1 (spin up), dark blue for -1 (spin down)
                 vec3 color = v_spin > 0.0 ? vec3(0.91, 0.44, 0.32) : vec3(0.1, 0.1, 0.3);
                 gl_FragColor = vec4(color, 1.0);
             }
@@ -143,15 +175,19 @@
         const posBuf = gl.createBuffer();
         const spinBuf = gl.createBuffer();
 
-        // State
+        // ===== SIMULATION STATE =====
+        // Grid: Int8Array of ±1 spins
+        // ExpTable: precomputed Boltzmann factors for Metropolis algorithm
         let grid, positions, spinsFloat;
         let sweeps = 0;
         let temperature = TC;
         let paused = true;
         let stepsPerSecond = 30;
-        let expTable = {};
+        let expTable = {};  // Precomputed exp(-ΔE/T) values
         let lastFpsTime = 0, frameCount = 0, fps = 0;
 
+        // Precompute Boltzmann factors for all possible energy changes
+        // ΔE ∈ {-8, -4, 0, 4, 8} for 2D Ising with J=1
         function updateExpTable() {
             expTable = {};
             for (let dE = -8; dE <= 8; dE += 4) {
@@ -159,6 +195,8 @@
             }
         }
 
+        // ===== INITIALIZATION =====
+        // Random initial spins (high temperature start)
         function initGrid() {
             const n = GRID_SIZE * GRID_SIZE;
             grid = new Int8Array(n);
@@ -178,43 +216,52 @@
             updateExpTable();
         }
 
+        // ===== METROPOLIS ALGORITHM =====
+        // Calculate energy change if spin at idx flips: ΔE = 2s(h_L + h_R + h_U + h_D)
         function deltaEnergy(idx) {
             const i = Math.floor(idx / GRID_SIZE);
             const j = idx % GRID_SIZE;
             const spin = grid[idx];
 
+            // Periodic boundary conditions (torus topology)
             const top = grid[((i - 1 + GRID_SIZE) % GRID_SIZE) * GRID_SIZE + j];
             const bottom = grid[((i + 1) % GRID_SIZE) * GRID_SIZE + j];
             const left = grid[i * GRID_SIZE + ((j - 1 + GRID_SIZE) % GRID_SIZE)];
             const right = grid[i * GRID_SIZE + ((j + 1) % GRID_SIZE)];
 
-            return 2 * spin * (top + bottom + left + right);
+            return 2 * spin * (top + bottom + left + right);  // Energy change if flipped
         }
 
+        // Single Metropolis step: propose random spin flip, accept with Boltzmann probability
         function metropolisStep() {
             const idx = Math.floor(Math.random() * grid.length);
             const dE = deltaEnergy(idx);
 
+            // Accept if energy decreases OR with Boltzmann probability
             if (dE <= 0 || Math.random() < expTable[dE]) {
                 grid[idx] *= -1;
             }
         }
 
+        // Monte Carlo sweep: N random updates (one per site on average)
         function sweep() {
             const steps = GRID_SIZE * GRID_SIZE;
             for (let k = 0; k < steps; k++) {
                 metropolisStep();
             }
             sweeps++;
-            for (let i = 0; i < grid.length; i++) spinsFloat[i] = grid[i];
+            for (let i = 0; i < grid.length; i++) spinsFloat[i] = grid[i];  // Sync for GPU
         }
 
+        // ===== OBSERVABLES =====
+        // Magnetization: average spin (order parameter)
         function getMagnetization() {
             let sum = 0;
             for (let i = 0; i < grid.length; i++) sum += grid[i];
-            return sum / grid.length;
+            return sum / grid.length;  // Range: [-1, 1]
         }
 
+        // Energy: sum of nearest-neighbor interactions
         function getEnergy() {
             let energy = 0;
             for (let i = 0; i < GRID_SIZE; i++) {
@@ -226,13 +273,17 @@
                     energy -= spin * (right + bottom);
                 }
             }
-            return energy / grid.length;
+            return energy / grid.length;  // Energy per spin
         }
 
+        // Find connected domains of same-spin regions (for power law at Tc)
         function findDomains() {
+        }
+
             const visited = new Uint8Array(grid.length);
             const sizes = [];
 
+            // Depth-first search to find connected components
             for (let start = 0; start < grid.length; start++) {
                 if (visited[start]) continue;
 
@@ -240,6 +291,7 @@
                 const stack = [start];
                 let size = 0;
 
+                // DFS to measure domain size
                 while (stack.length > 0) {
                     const idx = stack.pop();
                     if (visited[idx] || grid[idx] !== targetSpin) continue;
@@ -258,9 +310,10 @@
 
                 if (size > 0) sizes.push(size);
             }
-            return sizes;
+            return sizes;  // Array of domain sizes for power law analysis
         }
 
+        // ===== RENDERING =====
         function render() {
             gl.viewport(0, 0, GRID_SIZE, GRID_SIZE);
             gl.clearColor(0.04, 0.04, 0.08, 1);
@@ -282,6 +335,7 @@
 
         let lastDomainSizes = [];
 
+        // Draw log-log plot of domain size distribution (power law at Tc)
         function renderChart() {
             const W = chartCanvas.width, H = chartCanvas.height;
             chartCtx.fillStyle = '#0a0a15';
@@ -295,6 +349,7 @@
                 return;
             }
 
+            // Bin domain sizes and count frequencies
             const counts = {};
             for (const s of lastDomainSizes) counts[s] = (counts[s] || 0) + 1;
             const sizes = Object.keys(counts).map(Number).sort((a,b) => a-b);
@@ -302,6 +357,7 @@
 
             const pad = 50;
             const cw = W - 2*pad, ch = H - 2*pad;
+            // Log-log scale for power law visualization
             const logMinS = Math.log10(Math.max(1, sizes[0]));
             const logMaxS = Math.log10(sizes[sizes.length-1]);
             const logMinF = Math.log10(Math.max(1, Math.min(...freqs)));
@@ -339,6 +395,7 @@
             document.getElementById('fps').textContent = fps;
         }
 
+        // ===== ANIMATION LOOP =====
         function animate(ts) {
             frameCount++;
             if (ts - lastFpsTime >= 1000) {
@@ -347,10 +404,10 @@
                 lastFpsTime = ts;
             }
             if (!paused) {
-                const spf = Math.max(1, Math.floor(stepsPerSecond / 60));
+                const spf = Math.max(1, Math.floor(stepsPerSecond / 60));  // Sweeps per frame
                 for (let i = 0; i < spf; i++) sweep();
                 render();
-                if (sweeps % 10 === 0) {
+                if (sweeps % 10 === 0) {  // Periodic domain analysis (expensive)
                     lastDomainSizes = findDomains();
                     renderChart();
                 }
@@ -359,6 +416,7 @@
             requestAnimationFrame(animate);
         }
 
+        // ===== EVENT LISTENERS =====
         document.getElementById('speed').addEventListener('input', e => {
             stepsPerSecond = parseInt(e.target.value);
             document.getElementById('speedVal').textContent = stepsPerSecond;
@@ -371,10 +429,11 @@
             initGrid();
             render();
         });
+        // Changing temperature requires recomputing Boltzmann factors
         document.getElementById('temperature').addEventListener('input', e => {
             temperature = parseFloat(e.target.value);
             document.getElementById('tempVal').textContent = temperature.toFixed(2);
-            updateExpTable();
+            updateExpTable();  // Recompute exp(-ΔE/T)
         });
         document.getElementById('reset').addEventListener('click', () => {
             initGrid();
@@ -388,6 +447,7 @@
             e.target.textContent = paused ? 'Start' : 'Pause';
         });
 
+        // ===== INITIALIZATION =====
         initGrid();
         render();
         updateStats();

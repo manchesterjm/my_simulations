@@ -1,3 +1,17 @@
+<!--
+    NOODLE LOOPS MONTE CARLO SIMULATION
+    ====================================
+    Visualizes the classic probability puzzle: Take n noodles and randomly tie their
+    2n endpoints in pairs. How many closed loops will form? This interactive simulation
+    runs Monte Carlo trials to estimate the probability distribution and compares results
+    to exact analytical probabilities.
+
+    Key Features:
+    - Visual representation of current trial with color-coded loops
+    - Real-time histogram showing loop count distribution
+    - Comparison between Monte Carlo estimates and exact probabilities
+    - Adjustable parameters: number of noodles, simulation speed
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +19,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Noodle Loops Monte Carlo</title>
     <style>
+        /* ===== GLOBAL STYLES ===== */
+        /* Dark theme with modern system fonts for readability */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #1a1a2e;
@@ -16,31 +32,49 @@
             align-items: center;
             min-height: 100vh;
         }
+
+        /* ===== HEADER STYLES ===== */
         h1 { margin-bottom: 10px; color: #f4a261; }
         .subtitle { color: #888; margin-bottom: 20px; text-align: center; max-width: 600px; }
+
+        /* ===== LAYOUT STYLES ===== */
+        /* Flexbox container for side-by-side canvas panels */
         .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+
+        /* Canvas styling with dark background and rounded corners */
         canvas { border: 2px solid #333; background: #0a0a15; border-radius: 8px; }
         .panel { display: flex; flex-direction: column; align-items: center; }
         .panel-title { font-size: 14px; color: #aaa; margin-bottom: 8px; }
+
+        /* ===== CONTROL STYLES ===== */
+        /* Horizontal layout for all controls and buttons */
         .controls { margin-top: 20px; display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
         .control-group { display: flex; flex-direction: column; align-items: center; gap: 5px; }
         label { font-size: 12px; color: #888; }
         input[type="range"] { width: 120px; }
+
+        /* Orange buttons matching the theme */
         button { background: #f4a261; color: #1a1a2e; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: bold; }
         button:hover { background: #f4b982; }
+
+        /* ===== STATISTICS STYLES ===== */
+        /* Color-coded stats to distinguish Monte Carlo vs exact probabilities */
         .stats { margin-top: 15px; font-size: 14px; color: #aaa; text-align: center; line-height: 1.8; }
-        .highlight { color: #f4a261; font-weight: bold; }
-        .exact { color: #2a9d8f; }
-        .monte-carlo { color: #e76f51; }
+        .highlight { color: #f4a261; font-weight: bold; }  /* General highlights */
+        .exact { color: #2a9d8f; }                          /* Exact analytical probabilities */
+        .monte-carlo { color: #e76f51; }                    /* Monte Carlo estimates */
     </style>
 </head>
 <body>
+    <!-- ===== PAGE HEADER ===== -->
     <h1>Noodle Loops Simulation</h1>
     <p class="subtitle">
         Classic probability puzzle: Take n noodles, randomly tie their 2n endpoints in pairs.
         How many closed loops form? Watch the Monte Carlo simulation converge to exact probabilities!
     </p>
 
+    <!-- ===== VISUALIZATION PANELS ===== -->
+    <!-- Two canvases: left shows current trial, right shows histogram -->
     <div class="container">
         <div class="panel">
             <div class="panel-title">Current Trial Visualization</div>
@@ -52,6 +86,8 @@
         </div>
     </div>
 
+    <!-- ===== STATISTICS DISPLAY ===== -->
+    <!-- Shows trial count, probabilities (MC vs exact), and average -->
     <div class="stats">
         <div>Trials: <span class="highlight" id="trials">0</span> | Current Loops: <span class="highlight" id="currentLoops">-</span></div>
         <div>
@@ -65,6 +101,8 @@
         </div>
     </div>
 
+    <!-- ===== CONTROL PANEL ===== -->
+    <!-- Sliders for noodles and speed, plus start/reset/step buttons -->
     <div class="controls">
         <div class="control-group">
             <label>Noodles: <span id="noodleVal">7</span></label>
@@ -80,7 +118,8 @@
     </div>
 
     <script>
-        // Canvas setup
+        // ===== CANVAS SETUP =====
+        // Two canvases: one for noodle visualization, one for histogram
         const noodleCanvas = document.getElementById('noodleCanvas');
         const noodleCtx = noodleCanvas.getContext('2d');
         noodleCanvas.width = 500;
@@ -91,7 +130,8 @@
         histCanvas.width = 400;
         histCanvas.height = 400;
 
-        // State
+        // ===== SIMULATION STATE =====
+        // Tracks all trial results and current pairing/loop configuration
         let n = 7;
         let running = false;
         let speed = 20;
@@ -104,7 +144,8 @@
         let lastTrialPairing = null;
         let lastTrialLoopAssignments = null;
 
-        // Colors for loops
+        // ===== VISUALIZATION COLORS =====
+        // 20 distinct colors to differentiate loops in the visualization
         const loopColors = [
             '#e63946', '#f4a261', '#2a9d8f', '#457b9d', '#9d4edd',
             '#06ffa5', '#ff6b6b', '#4ecdc4', '#ffe66d', '#95e1d3',
@@ -112,9 +153,11 @@
             '#88d8b0', '#ff6f69', '#96ceb4', '#ffeead', '#d4a5a5'
         ];
 
-        // Exact probability calculations
+        // ===== EXACT PROBABILITY CALCULATIONS =====
+        // Uses Lanczos approximation for log-gamma function to compute exact probabilities
         function lgamma(x) {
-            // Lanczos approximation
+            // Lanczos approximation for log-gamma function
+            // Required for computing exact probabilities via combinatorics
             const g = 7;
             const c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028,
                 771.32342877765313, -176.61502916214059, 12.507343278686905,
@@ -131,24 +174,32 @@
             return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
         }
 
+        // Probability of forming exactly 1 loop (all noodles connected)
+        // Formula: P(1 loop) = (2^(2n-1) * n! * n!) / (2n)!
         function singleLoopProbExact(n) {
             const lnP = (2 * n - 1) * Math.log(2) + lgamma(n) + lgamma(n + 1) - lgamma(2 * n + 1);
             return Math.exp(lnP);
         }
 
+        // Probability of forming n loops (each noodle forms its own loop)
+        // Formula: P(n loops) = (2^n * n!) / (2n)!
         function allLoopsProbExact(n) {
             const lnP = n * Math.log(2) + lgamma(n + 1) - lgamma(2 * n + 1);
             return Math.exp(lnP);
         }
 
-        // Simulation
+        // ===== SIMULATION LOGIC =====
+        // Monte Carlo approach: generate random pairings and count loops
+        // Generate a random pairing of m endpoints (m must be even)
+        // Returns a mapping where mapping[i] = j means endpoint i is tied to endpoint j
         function randomPairing(m) {
             const arr = Array.from({length: m}, (_, i) => i);
-            // Fisher-Yates shuffle
+            // Fisher-Yates shuffle to randomize endpoints
             for (let i = m - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [arr[i], arr[j]] = [arr[j], arr[i]];
             }
+            // Pair consecutive elements in shuffled array
             const mapping = new Array(m);
             for (let i = 0; i < m; i += 2) {
                 mapping[arr[i]] = arr[i + 1];
@@ -157,22 +208,27 @@
             return mapping;
         }
 
+        // Count loops formed by a random pairing
+        // Algorithm: Each noodle has endpoints [2i, 2i+1]. Random pairing A ties endpoints.
+        // Compose A with noodle pairing B to get permutation P = A ∘ B
+        // Loops = cycles in P divided by 2 (each loop traversed twice)
         function findLoops(n, A) {
             const m = 2 * n;
-            // B is the noodle pairing (0-1, 2-3, 4-5, ...)
+            // B is the noodle pairing: endpoint 2i pairs with 2i+1 (same noodle)
             const B = new Array(m);
             for (let i = 0; i < n; i++) {
                 B[2 * i] = 2 * i + 1;
                 B[2 * i + 1] = 2 * i;
             }
 
-            // P = A ∘ B
+            // P = A ∘ B: composition of random pairing with noodle pairing
             const P = new Array(m);
             for (let i = 0; i < m; i++) {
                 P[i] = A[B[i]];
             }
 
-            // Count cycles and track which loop each endpoint belongs to
+            // Count cycles in permutation P using depth-first traversal
+            // Track which loop each endpoint belongs to for visualization
             const seen = new Array(m).fill(false);
             const loopAssignment = new Array(m).fill(-1);
             let loopCount = 0;
@@ -189,11 +245,13 @@
                 }
             }
 
-            // Each pair of cycles in P corresponds to one actual loop
-            // Actually, loops = cycles / 2
+            // Each loop is traversed twice (once in each direction)
+            // Therefore: actual loops = cycle count / 2
             return { loops: Math.floor(loopCount / 2), loopAssignment, A };
         }
 
+        // Run a single Monte Carlo trial
+        // Generate random pairing, count loops, update statistics
         function runTrial() {
             const m = 2 * n;
             const A = randomPairing(m);
@@ -211,7 +269,8 @@
             if (result.loops === n) nLoopCount++;
         }
 
-        // Rendering
+        // ===== RENDERING FUNCTIONS =====
+        // Draw noodles and their random pairings with color-coded loops
         function renderNoodles() {
             const ctx = noodleCtx;
             const W = noodleCanvas.width;
@@ -228,10 +287,11 @@
             const leftX = margin;
             const rightX = margin + noodleWidth;
 
-            // Draw noodles
+            // Draw horizontal noodles with endpoints labeled 0,1,2,3...
             ctx.lineWidth = 4;
             for (let i = 0; i < n; i++) {
                 const y = margin + (i + 0.5) * noodleHeight;
+                // Color each noodle by which loop it belongs to
                 const loopIdx = lastTrialLoopAssignments ? Math.floor(lastTrialLoopAssignments[2 * i] / 2) : i;
                 ctx.strokeStyle = loopColors[loopIdx % loopColors.length];
 
@@ -256,7 +316,7 @@
                 ctx.fillText(2 * i + 1, rightX + 10, y + 3);
             }
 
-            // Draw pairings (connections between endpoints)
+            // Draw curved connections showing which endpoints are tied together
             if (lastTrialPairing) {
                 ctx.lineWidth = 2;
                 const drawn = new Set();
@@ -267,6 +327,7 @@
                     drawn.add(i);
                     drawn.add(j);
 
+                    // Calculate position of each endpoint
                     const noodle1 = Math.floor(i / 2);
                     const end1 = i % 2; // 0 = left, 1 = right
                     const noodle2 = Math.floor(j / 2);
@@ -278,19 +339,19 @@
                     const x2 = end2 === 0 ? leftX : rightX;
 
                     const loopIdx = Math.floor(lastTrialLoopAssignments[i] / 2);
-                    ctx.strokeStyle = loopColors[loopIdx % loopColors.length] + '88';
+                    ctx.strokeStyle = loopColors[loopIdx % loopColors.length] + '88';  // Semi-transparent
 
-                    // Draw curved connection
+                    // Draw bezier curve connecting the two endpoints
                     ctx.beginPath();
                     ctx.moveTo(x1, y1);
 
                     if (x1 === x2) {
-                        // Same side - draw arc on that side
+                        // Both endpoints on same side - curve outward
                         const offset = (x1 === leftX) ? -30 : 30;
                         const midY = (y1 + y2) / 2;
                         ctx.bezierCurveTo(x1 + offset, y1, x2 + offset, y2, x2, y2);
                     } else {
-                        // Different sides - draw across
+                        // Endpoints on different sides - curve across middle
                         const midX = (x1 + x2) / 2;
                         ctx.bezierCurveTo(midX, y1, midX, y2, x2, y2);
                     }
@@ -298,13 +359,14 @@
                 }
             }
 
-            // Draw loop count
+            // Display total loop count at bottom of canvas
             ctx.fillStyle = '#f4a261';
             ctx.font = 'bold 24px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText(`${lastTrialLoops} loop${lastTrialLoops !== 1 ? 's' : ''}`, W / 2, H - 10);
         }
 
+        // Draw bar chart showing distribution of loop counts across all trials
         function renderHistogram() {
             const ctx = histCtx;
             const W = histCanvas.width;
@@ -325,7 +387,7 @@
             const chartW = W - 2 * margin;
             const chartH = H - 2 * margin;
 
-            // Find max count
+            // Normalize bar heights based on most frequent count
             let maxCount = 0;
             for (let i = 1; i <= n; i++) {
                 maxCount = Math.max(maxCount, loopCounts[i] || 0);
@@ -334,7 +396,7 @@
 
             const barWidth = chartW / n - 4;
 
-            // Draw bars
+            // Draw one bar for each possible loop count (1 to n)
             for (let i = 1; i <= n; i++) {
                 const count = loopCounts[i] || 0;
                 const barHeight = (count / maxCount) * chartH;
@@ -344,20 +406,20 @@
                 ctx.fillStyle = loopColors[(i - 1) % loopColors.length];
                 ctx.fillRect(x, y, barWidth, barHeight);
 
-                // Label
+                // X-axis label (loop count)
                 ctx.fillStyle = '#aaa';
                 ctx.font = '12px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillText(i, x + barWidth / 2, H - margin + 15);
 
-                // Count on top
+                // Display count above bar
                 if (count > 0) {
                     ctx.fillStyle = '#fff';
                     ctx.fillText(count, x + barWidth / 2, y - 5);
                 }
             }
 
-            // Axes
+            // Draw chart axes
             ctx.strokeStyle = '#444';
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -366,13 +428,14 @@
             ctx.lineTo(W - margin, H - margin);
             ctx.stroke();
 
-            // Labels
+            // X-axis title
             ctx.fillStyle = '#888';
             ctx.font = '12px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('Number of Loops', W / 2, H - 10);
         }
 
+        // Update all statistics displays (trial count, probabilities, average)
         function updateStats() {
             document.getElementById('trials').textContent = trialCount;
             document.getElementById('currentLoops').textContent = lastTrialLoops;
@@ -392,6 +455,7 @@
             document.getElementById('exactn').textContent = allLoopsProbExact(n).toExponential(4);
         }
 
+        // Reset all simulation state
         function reset() {
             trialCount = 0;
             loopCounts = {};
@@ -407,6 +471,7 @@
             updateStats();
         }
 
+        // Run a single trial and update all displays
         function step() {
             runTrial();
             renderNoodles();
@@ -414,13 +479,15 @@
             updateStats();
         }
 
+        // ===== ANIMATION LOOP =====
+        // Run trials at specified speed (trials per second)
         let animationId = null;
         let lastTime = 0;
 
         function animate(timestamp) {
             if (!running) return;
 
-            const interval = 1000 / speed;
+            const interval = 1000 / speed;  // Convert speed (trials/sec) to milliseconds
             if (timestamp - lastTime >= interval) {
                 step();
                 lastTime = timestamp;
@@ -428,11 +495,13 @@
             animationId = requestAnimationFrame(animate);
         }
 
-        // Event listeners
+        // ===== EVENT LISTENERS =====
+        // Handle user interactions with controls
+        // Changing number of noodles resets the simulation
         document.getElementById('noodles').addEventListener('input', (e) => {
             n = parseInt(e.target.value);
             document.getElementById('noodleVal').textContent = n;
-            reset();
+            reset();  // Reset because probabilities change with n
         });
 
         document.getElementById('speed').addEventListener('input', (e) => {
@@ -440,19 +509,21 @@
             document.getElementById('speedVal').textContent = speed;
         });
 
+        // Toggle between running and paused states
         document.getElementById('start').addEventListener('click', (e) => {
             running = !running;
             e.target.textContent = running ? 'Pause' : 'Start';
-            if (running) {
+            if (running) {  // Start animation loop
                 lastTime = performance.now();
                 animationId = requestAnimationFrame(animate);
             }
         });
 
         document.getElementById('reset').addEventListener('click', reset);
-        document.getElementById('step').addEventListener('click', step);
+        document.getElementById('step').addEventListener('click', step);  // Manual single trial
 
-        // Initialize
+        // ===== INITIALIZATION =====
+        // Set up initial display
         reset();
         updateStats();
     </script>

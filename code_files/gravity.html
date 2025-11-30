@@ -1,3 +1,40 @@
+<!--
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    N-BODY GRAVITY SIMULATOR                                ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+DESCRIPTION:
+This is an interactive N-body gravity simulation that models gravitational
+interactions between celestial bodies (star, planets, asteroids, comets).
+Uses real physics constants and Velocity Verlet integration for accurate
+orbital mechanics.
+
+VISUALIZATION:
+  - Central star with adjustable mass and size (yellow with glow effect)
+  - Planets of various sizes orbiting the star
+  - Asteroids (small, gray/brown, circular orbits in inner system)
+  - Comets (small, icy cyan, highly elliptical orbits with visible tails)
+  - Orbital trails showing recent paths
+  - Adjustable zoom to view different scales
+
+SIMULATION MECHANICS:
+  - Universal gravitation: F = G * m1 * m2 / r²
+  - Velocity Verlet integration for accurate energy conservation
+  - Collision detection with momentum/mass conservation
+  - Collisions result in mergers (larger body absorbs smaller)
+  - Small bodies become planets when mass exceeds threshold
+  - Ejection detection: bodies exceeding escape velocity are removed
+  - Moon capture: asteroids/comets can become moons of planets
+
+INTERACTIVITY:
+  - Adjust star radius and density (affects mass via volume)
+  - Add random planets, asteroids, or comets
+  - Click canvas to add planet at specific location
+  - Select and modify planet velocities (boost/reduce speed)
+  - Delete selected planets
+  - Control simulation speed, time scale, trail length, and zoom
+  - Event log tracks collisions, ejections, and captures
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,12 +42,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>N-Body Gravity Simulator</title>
     <style>
+        /* ===== GLOBAL STYLES ===== */
+        /* Box-sizing for consistent sizing across all elements */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
+        /* Dark space theme with gradient background */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 100%);
@@ -24,11 +64,12 @@
             margin: 0 auto;
         }
 
+        /* ===== HEADER STYLES ===== */
         h1 {
             text-align: center;
             margin-bottom: 10px;
-            color: #ffd700;
-            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            color: #ffd700; /* Gold like the sun */
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5); /* Glow effect */
         }
 
         .subtitle {
@@ -37,26 +78,30 @@
             margin-bottom: 20px;
         }
 
+        /* ===== LAYOUT ===== */
+        /* Two-column grid: simulation canvas left, controls right */
         .main-content {
             display: grid;
             grid-template-columns: 1fr 350px;
             gap: 20px;
         }
 
+        /* ===== SIMULATION AREA ===== */
         .simulation-area {
             background: rgba(0, 0, 0, 0.5);
             border-radius: 15px;
             padding: 20px;
-            border: 1px solid rgba(255, 215, 0, 0.2);
+            border: 1px solid rgba(255, 215, 0, 0.2); /* Subtle gold border */
         }
 
         canvas {
             display: block;
             margin: 0 auto;
             border-radius: 10px;
-            cursor: crosshair;
+            cursor: crosshair; /* Indicates click-to-add functionality */
         }
 
+        /* ===== CONTROL PANEL ===== */
         .controls {
             background: rgba(0, 0, 0, 0.5);
             border-radius: 15px;
@@ -95,9 +140,10 @@
             color: #aaa;
         }
 
+        /* ===== INPUT CONTROLS ===== */
         input[type="range"] {
             width: 120px;
-            accent-color: #ffd700;
+            accent-color: #ffd700; /* Gold slider thumb */
         }
 
         input[type="number"] {
@@ -117,6 +163,7 @@
             text-align: right;
         }
 
+        /* ===== BUTTON STYLES ===== */
         button {
             width: 100%;
             padding: 12px;
@@ -129,6 +176,7 @@
             transition: all 0.3s ease;
         }
 
+        /* Primary action buttons (gold gradient) */
         .btn-primary {
             background: linear-gradient(135deg, #ffd700, #ff8c00);
             color: #000;
@@ -139,6 +187,7 @@
             box-shadow: 0 5px 20px rgba(255, 215, 0, 0.4);
         }
 
+        /* Secondary action buttons */
         .btn-secondary {
             background: rgba(255, 255, 255, 0.1);
             color: #e0e0e0;
@@ -149,11 +198,13 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
+        /* Destructive action buttons */
         .btn-danger {
             background: linear-gradient(135deg, #ff4444, #cc0000);
             color: white;
         }
 
+        /* Small nudge buttons for fine control */
         .btn-nudge {
             width: 24px;
             height: 24px;
@@ -184,6 +235,7 @@
             width: 80px;
         }
 
+        /* ===== STATISTICS DISPLAY ===== */
         .stats {
             font-family: monospace;
             font-size: 12px;
@@ -200,9 +252,10 @@
         }
 
         .stats-value {
-            color: #4CAF50;
+            color: #4CAF50; /* Green for values */
         }
 
+        /* ===== PLANET LIST ===== */
         .planet-list {
             max-height: 150px;
             overflow-y: auto;
@@ -235,6 +288,7 @@
             margin-right: 8px;
         }
 
+        /* ===== EVENT LOG ===== */
         .event-log {
             max-height: 100px;
             overflow-y: auto;
@@ -245,6 +299,7 @@
             border-radius: 5px;
         }
 
+        /* Color-coded event types */
         .event-collision {
             color: #ff6b6b;
         }
@@ -260,6 +315,7 @@
             line-height: 1.6;
         }
 
+        /* ===== RESPONSIVE DESIGN ===== */
         @media (max-width: 900px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -269,15 +325,19 @@
 </head>
 <body>
     <div class="container">
+        <!-- ===== HEADER ===== -->
         <h1>N-Body Gravity Simulator</h1>
         <p class="subtitle">Watch planets orbit, collide, and escape!</p>
 
         <div class="main-content">
+            <!-- ===== SIMULATION CANVAS ===== -->
             <div class="simulation-area">
                 <canvas id="canvas" width="800" height="800"></canvas>
             </div>
 
+            <!-- ===== CONTROL PANEL ===== -->
             <div class="controls">
+                <!-- Simulation Control Buttons -->
                 <div class="control-section">
                     <h3>Simulation Controls</h3>
                     <button id="startStop" class="btn-primary">Start</button>
@@ -287,6 +347,7 @@
                     <button id="addComet" class="btn-secondary">Add Comet</button>
                 </div>
 
+                <!-- Star Properties: radius and density control mass -->
                 <div class="control-section">
                     <h3>Star Properties</h3>
                     <div class="control-row">
@@ -309,10 +370,12 @@
                     </div>
                     <div class="control-row">
                         <label>Mass:</label>
+                        <!-- Calculated from radius and density (M = ρ * V) -->
                         <span class="value-display" id="starMassValue" style="color: #4CAF50;">1.00 M☉</span>
                     </div>
                 </div>
 
+                <!-- Simulation Parameters -->
                 <div class="control-section">
                     <h3>Parameters</h3>
                     <div class="control-row">
@@ -352,6 +415,7 @@
                     </div>
                 </div>
 
+                <!-- Statistics Display -->
                 <div class="control-section">
                     <h3>Statistics</h3>
                     <div class="stats">
@@ -378,11 +442,13 @@
                     </div>
                 </div>
 
+                <!-- Planet List -->
                 <div class="control-section">
                     <h3>Planets</h3>
                     <div class="planet-list" id="planetList"></div>
                 </div>
 
+                <!-- Selected Planet Controls -->
                 <div class="control-section">
                     <h3>Selected Planet</h3>
                     <button id="boostSpeed" class="btn-secondary">Boost Speed (+50%)</button>
@@ -390,6 +456,7 @@
                     <button id="deletePlanet" class="btn-danger">Delete Planet</button>
                 </div>
 
+                <!-- Event Log -->
                 <div class="control-section">
                     <h3>Event Log</h3>
                     <div class="event-log" id="eventLog">
@@ -397,6 +464,7 @@
                     </div>
                 </div>
 
+                <!-- Instructions -->
                 <div class="instructions">
                     <strong>Click</strong> on canvas to add a planet at that location.<br>
                     <strong>Click</strong> on a planet in the list to select it.<br>
@@ -406,81 +474,113 @@
         </div>
     </div>
 
+    <!-- ===== SIMULATION JAVASCRIPT ===== -->
     <script>
-        // Constants
-        const G = 6.674e-11;
-        const AU = 1.496e11; // Astronomical Unit in meters
-        const DAY = 86400;   // Seconds in a day
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  PHYSICAL CONSTANTS
+         * ═══════════════════════════════════════════════════════════════════
+         */
 
-        // Simulation state
-        let canvas, ctx;
-        let running = false;
-        let time = 0;
-        let dt = 3600 * 6; // 6 hours
-        let star = null;
-        let planets = [];
-        let collisions = 0;
-        let ejections = 0;
-        let selectedPlanet = null;
-        let eventLog = [];
+        const G = 6.674e-11;      // Gravitational constant (m³ kg⁻¹ s⁻²)
+        const AU = 1.496e11;      // Astronomical Unit in meters
+        const DAY = 86400;        // Seconds in a day
 
-        // Display settings
-        let scale = 3 * AU;
-        let trailLength = 200;
-        let showTrails = true;
-        let timeScale = 10;
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  SIMULATION STATE VARIABLES
+         * ═══════════════════════════════════════════════════════════════════
+         */
 
-        // Star settings (base values = Sun)
-        const BASE_STAR_MASS = 1.989e30;
-        const BASE_STAR_RADIUS = 6.96e8;
-        let starRadiusMultiplier = 1.0;
-        let starDensityMultiplier = 1.0;
+        let canvas, ctx;              // Canvas and rendering context
+        let running = false;          // Is simulation running?
+        let time = 0;                 // Simulation time (seconds)
+        let dt = 3600 * 6;           // Timestep: 6 hours
+        let star = null;             // Central star object
+        let planets = [];            // Array of planet objects
+        let collisions = 0;          // Collision counter
+        let ejections = 0;           // Ejection counter
+        let selectedPlanet = null;   // Index of selected planet
+        let eventLog = [];           // Recent events
 
-        // Mass threshold for small body to become a planet
-        const PLANET_MASS_THRESHOLD = 1e20;  // ~100x typical asteroid mass
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  DISPLAY SETTINGS
+         * ═══════════════════════════════════════════════════════════════════
+         */
 
-        // Planet colors
+        let scale = 3 * AU;          // Viewing scale (AU to pixels)
+        let trailLength = 200;       // Number of trail points
+        let showTrails = true;       // Show orbital trails?
+        let timeScale = 10;          // Simulation speed multiplier
+
+        // Star settings (base values are for our Sun)
+        const BASE_STAR_MASS = 1.989e30;      // Solar mass (kg)
+        const BASE_STAR_RADIUS = 6.96e8;      // Solar radius (m)
+        let starRadiusMultiplier = 1.0;       // User-controlled radius scale
+        let starDensityMultiplier = 1.0;      // User-controlled density scale
+
+        // Mass threshold: small bodies become planets above this mass
+        const PLANET_MASS_THRESHOLD = 1e20;   // ~100x typical asteroid
+
+        // Color palette for planets
         const COLORS = [
             '#4a9eff', '#ff6b6b', '#4ecdc4', '#ffe66d',
             '#95e1d3', '#f38181', '#aa96da', '#fcbad3',
             '#a8d8ea', '#aa96da', '#fcbad3', '#f4a261'
         ];
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  BODY CLASS - Represents a celestial body (star/planet/etc)
+         * ═══════════════════════════════════════════════════════════════════
+         *  Stores physical properties (mass, position, velocity, radius)
+         *  and orbital trail history
+         */
         class Body {
             constructor(mass, x, y, vx, vy, radius, color, name) {
-                this.mass = mass;
-                this.x = x;
-                this.y = y;
-                this.vx = vx;
-                this.vy = vy;
-                this.radius = radius;
-                this.color = color;
-                this.name = name;
-                this.trail = [];
-                this.ax = 0;
-                this.ay = 0;
+                this.mass = mass;        // Mass (kg)
+                this.x = x;              // X position (m)
+                this.y = y;              // Y position (m)
+                this.vx = vx;            // X velocity (m/s)
+                this.vy = vy;            // Y velocity (m/s)
+                this.radius = radius;    // Physical radius (m)
+                this.color = color;      // Display color
+                this.name = name;        // Display name
+                this.trail = [];         // Orbital trail points
+                this.ax = 0;             // X acceleration (m/s²)
+                this.ay = 0;             // Y acceleration (m/s²)
             }
 
+            // Calculate distance to another body
             distanceTo(other) {
                 const dx = other.x - this.x;
                 const dy = other.y - this.y;
                 return Math.sqrt(dx * dx + dy * dy);
             }
 
+            // Calculate kinetic energy (½mv²)
             kineticEnergy() {
                 return 0.5 * this.mass * (this.vx * this.vx + this.vy * this.vy);
             }
 
+            // Calculate speed magnitude
             speed() {
                 return Math.sqrt(this.vx * this.vx + this.vy * this.vy);
             }
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  INITIALIZATION
+         * ═══════════════════════════════════════════════════════════════════
+         */
+
         function init() {
             canvas = document.getElementById('canvas');
             ctx = canvas.getContext('2d');
 
-            // Event listeners
+            // Set up event listeners for all controls
             document.getElementById('startStop').addEventListener('click', toggleSimulation);
             document.getElementById('reset').addEventListener('click', resetSimulation);
             document.getElementById('addRandom').addEventListener('click', addRandomPlanet);
@@ -490,29 +590,32 @@
             document.getElementById('reduceSpeed').addEventListener('click', () => modifySpeed(0.7));
             document.getElementById('deletePlanet').addEventListener('click', deleteSelectedPlanet);
 
+            // Time scale slider
             document.getElementById('timeScale').addEventListener('input', (e) => {
                 timeScale = parseInt(e.target.value);
                 document.getElementById('timeScaleValue').textContent = timeScale + 'x';
             });
 
+            // Trail length slider
             document.getElementById('trailLength').addEventListener('input', (e) => {
                 trailLength = parseInt(e.target.value);
                 document.getElementById('trailLengthValue').textContent = trailLength;
             });
 
+            // Trail visibility checkbox
             document.getElementById('showTrails').addEventListener('change', (e) => {
                 showTrails = e.target.checked;
             });
 
+            // Star radius slider (exponential scale: 0.1x to 10x)
             document.getElementById('starRadius').addEventListener('input', (e) => {
-                // Slider 1-100 maps to 0.1x - 10x (exponential scale)
                 starRadiusMultiplier = Math.pow(10, (parseInt(e.target.value) - 50) / 50);
                 document.getElementById('starRadiusValue').textContent = starRadiusMultiplier.toFixed(1) + 'x';
                 updateStarProperties();
             });
 
+            // Star density slider (exponential scale: 0.1x to 10x)
             document.getElementById('starDensity').addEventListener('input', (e) => {
-                // Slider 1-100 maps to 0.1x - 10x (exponential scale)
                 starDensityMultiplier = Math.pow(10, (parseInt(e.target.value) - 50) / 50);
                 document.getElementById('starDensityValue').textContent = starDensityMultiplier.toFixed(1) + 'x';
                 updateStarProperties();
@@ -530,7 +633,7 @@
             document.getElementById('trailLengthDown').addEventListener('click', () => nudgeSlider('trailLength', -10));
             document.getElementById('trailLengthUp').addEventListener('click', () => nudgeSlider('trailLength', 10));
 
-            // Zoom slider (maps 1-100 to 0.5 AU - 10 AU, exponential scale)
+            // Zoom slider (exponential scale: 0.5 AU to 10 AU)
             document.getElementById('zoomScale').addEventListener('input', (e) => {
                 const sliderVal = parseInt(e.target.value);
                 scale = 0.5 * Math.pow(20, sliderVal / 100) * AU;
@@ -539,12 +642,19 @@
             document.getElementById('zoomOut').addEventListener('click', () => nudgeSlider('zoomScale', 5));
             document.getElementById('zoomIn').addEventListener('click', () => nudgeSlider('zoomScale', -5));
 
+            // Canvas click to add planet
             canvas.addEventListener('click', onCanvasClick);
 
             resetSimulation();
             requestAnimationFrame(animate);
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  SIMULATION RESET
+         * ═══════════════════════════════════════════════════════════════════
+         *  Creates new star and random planets
+         */
         function resetSimulation() {
             const numPlanets = parseInt(document.getElementById('numPlanets').value);
 
@@ -554,21 +664,21 @@
             eventLog = [];
             selectedPlanet = null;
 
-            // Create star (Sun-like, adjusted by multipliers)
+            // Create star with adjustable properties
             const starRadius = BASE_STAR_RADIUS * starRadiusMultiplier;
-            // Mass = density * volume, volume scales with r^3
+            // Mass = density * volume, volume scales with r³
             const starMass = BASE_STAR_MASS * starDensityMultiplier * Math.pow(starRadiusMultiplier, 3);
             star = new Body(
                 starMass,
-                0, 0,
-                0, 0,
+                0, 0,           // At origin
+                0, 0,           // Stationary
                 starRadius,
-                '#ffd700',
+                '#ffd700',      // Gold color
                 'Star'
             );
             updateStarMassDisplay();
 
-            // Create planets
+            // Create random planets
             planets = [];
             for (let i = 0; i < numPlanets; i++) {
                 addRandomPlanet();
@@ -579,32 +689,51 @@
             document.getElementById('eventLog').innerHTML = '<div style="color: #666;">Events will appear here...</div>';
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  STAR PROPERTY UPDATES
+         * ═══════════════════════════════════════════════════════════════════
+         */
+
         function updateStarProperties() {
             if (!star) return;
 
-            // Update star radius and mass based on multipliers
+            // Update star radius based on multiplier
             star.radius = BASE_STAR_RADIUS * starRadiusMultiplier;
-            // Mass = density * volume, volume scales with r^3
+            // Mass = density * volume, volume scales with r³
             star.mass = BASE_STAR_MASS * starDensityMultiplier * Math.pow(starRadiusMultiplier, 3);
             updateStarMassDisplay();
         }
 
         function updateStarMassDisplay() {
-            // Display mass in solar masses
+            // Display mass in solar masses (M☉)
             const solarMasses = star.mass / BASE_STAR_MASS;
             document.getElementById('starMassValue').textContent = solarMasses.toFixed(2) + ' M☉';
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  SLIDER NUDGE HELPER
+         * ═══════════════════════════════════════════════════════════════════
+         *  Small increment/decrement for precise control
+         */
         function nudgeSlider(sliderId, delta) {
             const slider = document.getElementById(sliderId);
             const min = parseInt(slider.min);
             const max = parseInt(slider.max);
             const newValue = Math.max(min, Math.min(max, parseInt(slider.value) + delta));
             slider.value = newValue;
-            // Trigger the input event to update the display and properties
+            // Trigger input event to update display and properties
             slider.dispatchEvent(new Event('input'));
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  BODY CREATION FUNCTIONS
+         * ═══════════════════════════════════════════════════════════════════
+         */
+
+        // Add random planet with circular orbit
         function addRandomPlanet() {
             const minOrbit = 0.3 * AU;
             const maxOrbit = 2.5 * AU;
@@ -614,12 +743,12 @@
             const x = distance * Math.cos(angle);
             const y = distance * Math.sin(angle);
 
-            // Circular orbital velocity
+            // Circular orbital velocity: v = sqrt(GM/r)
             const vOrb = Math.sqrt(G * star.mass / distance);
             const vx = -vOrb * Math.sin(angle);
             const vy = vOrb * Math.cos(angle);
 
-            // Random mass and radius
+            // Random mass and radius (planet-sized)
             const mass = 1e23 + Math.random() * 1e26;
             const radius = 1e6 + Math.random() * 5e7;
 
@@ -630,8 +759,8 @@
             updatePlanetList();
         }
 
+        // Add asteroid (small, rocky, circular orbit)
         function addAsteroid() {
-            // Asteroids: small, rocky, mostly circular orbits in asteroid belt region
             const minOrbit = 0.4 * AU;
             const maxOrbit = 0.8 * AU;
             const distance = minOrbit + Math.random() * (maxOrbit - minOrbit);
@@ -640,7 +769,7 @@
             const x = distance * Math.cos(angle);
             const y = distance * Math.sin(angle);
 
-            // Slightly elliptical orbit (velocity factor 0.9-1.1)
+            // Slightly elliptical orbit (velocity factor 0.95-1.05)
             const velocityFactor = 0.95 + Math.random() * 0.1;
             const vOrb = Math.sqrt(G * star.mass / distance) * velocityFactor;
             const vx = -vOrb * Math.sin(angle);
@@ -661,17 +790,16 @@
             updatePlanetList();
         }
 
+        // Add comet (small, icy, highly elliptical orbit)
         function addComet() {
-            // Comets: small, icy, highly elliptical orbits from outer system
             const distance = (2 + Math.random() * 2) * AU;  // Start from outer system
             const angle = Math.random() * 2 * Math.PI;
 
             const x = distance * Math.cos(angle);
             const y = distance * Math.sin(angle);
 
-            // Highly elliptical orbit - velocity pointing somewhat inward
+            // Highly elliptical orbit - add inward velocity component
             const vOrb = Math.sqrt(G * star.mass / distance);
-            // Add velocity component toward star for elliptical orbit
             const inwardAngle = angle + Math.PI + (Math.random() - 0.5) * 0.5;
             const ellipticalBoost = 0.3 + Math.random() * 0.4;
             const vx = -vOrb * Math.sin(angle) + vOrb * ellipticalBoost * Math.cos(inwardAngle);
@@ -692,10 +820,12 @@
             updatePlanetList();
         }
 
+        // Add planet at clicked canvas position
         function addPlanetAt(canvasX, canvasY) {
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
 
+            // Convert canvas coordinates to simulation coordinates
             const x = (canvasX - centerX) / canvas.width * scale * 2;
             const y = (canvasY - centerY) / canvas.height * scale * 2;
 
@@ -704,7 +834,7 @@
 
             const angle = Math.atan2(y, x);
 
-            // Circular orbital velocity
+            // Give it circular orbital velocity
             const vOrb = Math.sqrt(G * star.mass / distance);
             const vx = -vOrb * Math.sin(angle);
             const vy = vOrb * Math.cos(angle);
@@ -719,6 +849,7 @@
             updatePlanetList();
         }
 
+        // Canvas click handler
         function onCanvasClick(e) {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -726,14 +857,27 @@
             addPlanetAt(x, y);
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  SIMULATION CONTROL
+         * ═══════════════════════════════════════════════════════════════════
+         */
+
         function toggleSimulation() {
             running = !running;
             document.getElementById('startStop').textContent = running ? 'Pause' : 'Start';
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  PHYSICS - GRAVITATIONAL ACCELERATION
+         * ═══════════════════════════════════════════════════════════════════
+         *  Calculates acceleration for all planets due to gravity
+         *  Uses softening parameter to prevent singularities in close encounters
+         */
         function computeAccelerations() {
             const allBodies = [star, ...planets];
-            const softening = 1e9;
+            const softening = 1e9;  // Softening length (meters)
 
             for (const planet of planets) {
                 let ax = 0, ay = 0;
@@ -746,6 +890,7 @@
                     const r = Math.sqrt(dx * dx + dy * dy);
                     const rSoft = Math.sqrt(r * r + softening * softening);
 
+                    // Gravitational acceleration: a = GM/r²
                     const acc = G * other.mass / (rSoft * rSoft);
                     ax += acc * dx / r;
                     ay += acc * dy / r;
@@ -756,10 +901,17 @@
             }
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  PHYSICS - TIME INTEGRATION
+         * ═══════════════════════════════════════════════════════════════════
+         *  Velocity Verlet integrator for accurate energy conservation
+         *  Better than Euler for orbital mechanics
+         */
         function step() {
             if (planets.length === 0) return;
 
-            // Record trails
+            // Record trail positions
             for (const planet of planets) {
                 planet.trail.push({ x: planet.x, y: planet.y });
                 if (planet.trail.length > trailLength) {
@@ -767,21 +919,22 @@
                 }
             }
 
-            // Velocity Verlet integration
+            // Velocity Verlet integration:
+            // 1. Compute current accelerations
             computeAccelerations();
             const oldAccels = planets.map(p => ({ ax: p.ax, ay: p.ay }));
 
-            // Update positions
+            // 2. Update positions: x(t+dt) = x(t) + v(t)*dt + 0.5*a(t)*dt²
             for (let i = 0; i < planets.length; i++) {
                 const p = planets[i];
                 p.x += p.vx * dt + 0.5 * oldAccels[i].ax * dt * dt;
                 p.y += p.vy * dt + 0.5 * oldAccels[i].ay * dt * dt;
             }
 
-            // Compute new accelerations
+            // 3. Compute new accelerations at t+dt
             computeAccelerations();
 
-            // Update velocities
+            // 4. Update velocities: v(t+dt) = v(t) + 0.5*(a(t) + a(t+dt))*dt
             for (let i = 0; i < planets.length; i++) {
                 const p = planets[i];
                 p.vx += 0.5 * (oldAccels[i].ax + p.ax) * dt;
@@ -790,20 +943,25 @@
 
             time += dt;
 
-            // Handle collisions and ejections
+            // Handle collisions, ejections, and captures
             handleCollisions();
             checkEjections();
             checkCaptures();
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  COLLISION DETECTION AND HANDLING
+         * ═══════════════════════════════════════════════════════════════════
+         *  Detects overlapping bodies and merges them via momentum conservation
+         */
         function handleCollisions() {
             const toRemove = new Set();
 
-            // Calculate collision radius to match visual representation
-            // Visual radius in pixels: Math.max(4, Math.min(20, (radius/scale)*canvas.width*500))
-            // Convert back to simulation units for collision detection
+            // Convert display radius to simulation units for collision detection
             const pixelToSim = scale * 2 / canvas.width;
 
+            // Check planet-planet collisions
             for (let i = 0; i < planets.length; i++) {
                 for (let j = i + 1; j < planets.length; j++) {
                     if (toRemove.has(i) || toRemove.has(j)) continue;
@@ -812,7 +970,7 @@
                     const p2 = planets[j];
                     const dist = p1.distanceTo(p2);
 
-                    // Use visual radius for collision (what user sees)
+                    // Calculate visual radii (what user sees on screen)
                     const visualRadius1 = Math.max(4, Math.min(20, (p1.radius / scale) * canvas.width * 500));
                     const visualRadius2 = Math.max(4, Math.min(20, (p2.radius / scale) * canvas.width * 500));
                     const combinedRadius = (visualRadius1 + visualRadius2) * pixelToSim;
@@ -821,42 +979,41 @@
                         const m1 = p1.mass;
                         const m2 = p2.mass;
 
-                        // Check if one is a small body (asteroid/comet/moon) and other is a planet
+                        // Determine if either is a small body
                         const p1IsSmall = p1.type === 'asteroid' || p1.type === 'comet' || p1.type === 'moon';
                         const p2IsSmall = p2.type === 'asteroid' || p2.type === 'comet' || p2.type === 'moon';
 
+                        // Handle different collision cases
                         if (p1IsSmall && !p2IsSmall) {
-                            // p1 is absorbed by p2 (planet)
-                            // Conservation of momentum
+                            // p1 (small) absorbed by p2 (planet)
                             p2.vx = (p2.mass * p2.vx + p1.mass * p1.vx) / (p2.mass + p1.mass);
                             p2.vy = (p2.mass * p2.vy + p1.mass * p1.vy) / (p2.mass + p1.mass);
                             p2.mass += p1.mass;
-                            p2.radius = Math.pow(p2.radius * p2.radius * p2.radius + p1.radius * p1.radius * p1.radius, 1/3);
+                            p2.radius = Math.pow(p2.radius**3 + p1.radius**3, 1/3);
                             toRemove.add(i);
                             collisions++;
                             logEvent(`${p1.name} absorbed by ${p2.name}!`, 'collision');
                         } else if (p2IsSmall && !p1IsSmall) {
-                            // p2 is absorbed by p1 (planet)
+                            // p2 (small) absorbed by p1 (planet)
                             p1.vx = (p1.mass * p1.vx + p2.mass * p2.vx) / (p1.mass + p2.mass);
                             p1.vy = (p1.mass * p1.vy + p2.mass * p2.vy) / (p1.mass + p2.mass);
                             p1.mass += p2.mass;
-                            p1.radius = Math.pow(p1.radius * p1.radius * p1.radius + p2.radius * p2.radius * p2.radius, 1/3);
+                            p1.radius = Math.pow(p1.radius**3 + p2.radius**3, 1/3);
                             toRemove.add(j);
                             collisions++;
                             logEvent(`${p2.name} absorbed by ${p1.name}!`, 'collision');
                         } else if (p1IsSmall && p2IsSmall) {
-                            // Both are small bodies - merge them (larger absorbs smaller)
+                            // Both small bodies - larger absorbs smaller
                             if (m1 >= m2) {
-                                // p1 absorbs p2
                                 p1.vx = (p1.mass * p1.vx + p2.mass * p2.vx) / (p1.mass + p2.mass);
                                 p1.vy = (p1.mass * p1.vy + p2.mass * p2.vy) / (p1.mass + p2.mass);
                                 p1.mass += p2.mass;
-                                p1.radius = Math.pow(p1.radius * p1.radius * p1.radius + p2.radius * p2.radius * p2.radius, 1/3);
+                                p1.radius = Math.pow(p1.radius**3 + p2.radius**3, 1/3);
                                 toRemove.add(j);
                                 collisions++;
                                 logEvent(`${p2.name} merged into ${p1.name}!`, 'collision');
 
-                                // Check if it should become a planet
+                                // Check if it became a planet
                                 if (p1.mass >= PLANET_MASS_THRESHOLD) {
                                     const oldName = p1.name;
                                     p1.type = undefined;
@@ -865,16 +1022,14 @@
                                     logEvent(`${oldName} became a planet!`, 'ejection');
                                 }
                             } else {
-                                // p2 absorbs p1
                                 p2.vx = (p2.mass * p2.vx + p1.mass * p1.vx) / (p2.mass + p1.mass);
                                 p2.vy = (p2.mass * p2.vy + p1.mass * p1.vy) / (p2.mass + p1.mass);
                                 p2.mass += p1.mass;
-                                p2.radius = Math.pow(p2.radius * p2.radius * p2.radius + p1.radius * p1.radius * p1.radius, 1/3);
+                                p2.radius = Math.pow(p2.radius**3 + p1.radius**3, 1/3);
                                 toRemove.add(i);
                                 collisions++;
                                 logEvent(`${p1.name} merged into ${p2.name}!`, 'collision');
 
-                                // Check if it should become a planet
                                 if (p2.mass >= PLANET_MASS_THRESHOLD) {
                                     const oldName = p2.name;
                                     p2.type = undefined;
@@ -884,12 +1039,12 @@
                                 }
                             }
                         } else {
-                            // Both are planets - merge them (larger absorbs smaller)
+                            // Both planets - larger absorbs smaller
                             if (m1 >= m2) {
                                 p1.vx = (p1.mass * p1.vx + p2.mass * p2.vx) / (p1.mass + p2.mass);
                                 p1.vy = (p1.mass * p1.vy + p2.mass * p2.vy) / (p1.mass + p2.mass);
                                 p1.mass += p2.mass;
-                                p1.radius = Math.pow(p1.radius * p1.radius * p1.radius + p2.radius * p2.radius * p2.radius, 1/3);
+                                p1.radius = Math.pow(p1.radius**3 + p2.radius**3, 1/3);
                                 toRemove.add(j);
                                 collisions++;
                                 logEvent(`${p2.name} merged into ${p1.name}!`, 'collision');
@@ -897,7 +1052,7 @@
                                 p2.vx = (p2.mass * p2.vx + p1.mass * p1.vx) / (p2.mass + p1.mass);
                                 p2.vy = (p2.mass * p2.vy + p1.mass * p1.vy) / (p2.mass + p1.mass);
                                 p2.mass += p1.mass;
-                                p2.radius = Math.pow(p2.radius * p2.radius * p2.radius + p1.radius * p1.radius * p1.radius, 1/3);
+                                p2.radius = Math.pow(p2.radius**3 + p1.radius**3, 1/3);
                                 toRemove.add(i);
                                 collisions++;
                                 logEvent(`${p1.name} merged into ${p2.name}!`, 'collision');
@@ -907,7 +1062,7 @@
                 }
             }
 
-            // Check for planet-star collisions
+            // Check planet-star collisions
             for (let i = 0; i < planets.length; i++) {
                 if (toRemove.has(i)) continue;
                 const p = planets[i];
@@ -919,6 +1074,7 @@
                 }
             }
 
+            // Remove collided planets
             planets = planets.filter((_, i) => !toRemove.has(i));
 
             if (toRemove.size > 0) {
@@ -926,6 +1082,12 @@
             }
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  EJECTION DETECTION
+         * ═══════════════════════════════════════════════════════════════════
+         *  Removes planets that exceed escape velocity
+         */
         function checkEjections() {
             const toRemove = [];
 
@@ -933,11 +1095,12 @@
                 const p = planets[i];
                 const dist = Math.sqrt(p.x * p.x + p.y * p.y);
                 const speed = p.speed();
-                const vEsc = Math.sqrt(2 * G * star.mass / dist);
+                const vEsc = Math.sqrt(2 * G * star.mass / dist);  // Escape velocity
 
-                // Radial velocity (positive = moving away)
+                // Radial velocity (positive = moving away from star)
                 const radialV = (p.x * p.vx + p.y * p.vy) / dist;
 
+                // Eject if speed > escape velocity, moving outward, and far enough
                 if (speed > vEsc && radialV > 0 && dist > 3 * AU) {
                     toRemove.push(i);
                     ejections++;
@@ -945,6 +1108,7 @@
                 }
             }
 
+            // Remove from back to front to preserve indices
             for (let i = toRemove.length - 1; i >= 0; i--) {
                 planets.splice(toRemove[i], 1);
             }
@@ -954,16 +1118,22 @@
             }
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  MOON CAPTURE
+         * ═══════════════════════════════════════════════════════════════════
+         *  Small bodies can be captured as moons if they're within a planet's
+         *  Hill sphere and moving slowly enough relative to the planet
+         */
         function checkCaptures() {
-            // Check if asteroids/comets can be captured by planets
             for (let i = 0; i < planets.length; i++) {
                 const smallBody = planets[i];
 
-                // Only check asteroids and comets that aren't already moons
+                // Only check asteroids and comets (not already moons)
                 if (!smallBody.type || smallBody.type === 'moon') continue;
                 if (smallBody.type !== 'asteroid' && smallBody.type !== 'comet') continue;
 
-                // Check against each planet (not asteroids/comets)
+                // Check against each planet
                 for (let j = 0; j < planets.length; j++) {
                     if (i === j) continue;
                     const planet = planets[j];
@@ -980,8 +1150,8 @@
                     const dy = smallBody.y - planet.y;
                     const distToPlanet = Math.sqrt(dx * dx + dy * dy);
 
-                    // Check if within Hill sphere
-                    if (distToPlanet < hillRadius * 0.5) {  // Use 50% of Hill sphere for stability
+                    // Check if within 50% of Hill sphere (for stability)
+                    if (distToPlanet < hillRadius * 0.5) {
                         // Calculate relative velocity
                         const relVx = smallBody.vx - planet.vx;
                         const relVy = smallBody.vy - planet.vy;
@@ -990,9 +1160,8 @@
                         // Escape velocity from planet at this distance
                         const escapeVel = Math.sqrt(2 * G * planet.mass / distToPlanet);
 
-                        // Capture if relative velocity is less than escape velocity
+                        // Capture if relative velocity < 80% of escape velocity
                         if (relSpeed < escapeVel * 0.8) {
-                            // Captured! Convert to moon
                             const oldType = smallBody.type;
                             smallBody.type = 'moon';
                             smallBody.parentPlanet = planet.name;
@@ -1008,6 +1177,11 @@
             }
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  EVENT LOGGING
+         * ═══════════════════════════════════════════════════════════════════
+         */
         function logEvent(message, type) {
             const timeStr = (time / DAY).toFixed(1);
             eventLog.unshift({ message: `[${timeStr}d] ${message}`, type });
@@ -1019,16 +1193,22 @@
             ).join('');
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  ENERGY CALCULATION
+         * ═══════════════════════════════════════════════════════════════════
+         *  Total energy (kinetic + potential) should be conserved
+         */
         function totalEnergy() {
             let energy = 0;
             const allBodies = [star, ...planets];
 
-            // Kinetic
+            // Kinetic energy
             for (const body of allBodies) {
                 energy += body.kineticEnergy();
             }
 
-            // Potential
+            // Potential energy: U = -G*m1*m2/r for each pair
             for (let i = 0; i < allBodies.length; i++) {
                 for (let j = i + 1; j < allBodies.length; j++) {
                     const r = allBodies[i].distanceTo(allBodies[j]);
@@ -1039,6 +1219,13 @@
             return energy;
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  PLANET MANIPULATION
+         * ═══════════════════════════════════════════════════════════════════
+         */
+
+        // Multiply velocity of selected planet by factor
         function modifySpeed(factor) {
             if (selectedPlanet !== null && selectedPlanet < planets.length) {
                 const p = planets[selectedPlanet];
@@ -1047,6 +1234,7 @@
             }
         }
 
+        // Remove selected planet
         function deleteSelectedPlanet() {
             if (selectedPlanet !== null && selectedPlanet < planets.length) {
                 planets.splice(selectedPlanet, 1);
@@ -1054,6 +1242,12 @@
                 updatePlanetList();
             }
         }
+
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  UI UPDATES
+         * ═══════════════════════════════════════════════════════════════════
+         */
 
         function updatePlanetList() {
             const listDiv = document.getElementById('planetList');
@@ -1081,14 +1275,21 @@
                 totalEnergy().toExponential(2) + ' J';
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  RENDERING
+         * ═══════════════════════════════════════════════════════════════════
+         */
+
         function draw() {
+            // Clear canvas with space background
             ctx.fillStyle = '#0a0a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
 
-            // Draw trails
+            // Draw orbital trails
             if (showTrails) {
                 for (const planet of planets) {
                     if (planet.trail.length < 2) continue;
@@ -1105,13 +1306,13 @@
                             ctx.lineTo(px, py);
                         }
                     }
-                    ctx.strokeStyle = planet.color + '40';
+                    ctx.strokeStyle = planet.color + '40';  // Semi-transparent
                     ctx.lineWidth = 1;
                     ctx.stroke();
                 }
             }
 
-            // Draw star
+            // Draw star with gradient and glow effect
             const starRadius = Math.max(15, (star.radius / scale) * canvas.width);
             ctx.beginPath();
             ctx.arc(centerX, centerY, starRadius, 0, Math.PI * 2);
@@ -1125,7 +1326,7 @@
             ctx.fillStyle = starGradient;
             ctx.fill();
 
-            // Glow effect
+            // Glow effect around star
             ctx.beginPath();
             ctx.arc(centerX, centerY, starRadius * 1.5, 0, Math.PI * 2);
             const glowGradient = ctx.createRadialGradient(
@@ -1147,7 +1348,7 @@
                 const planetRadius = Math.max(4, Math.min(20,
                     (planet.radius / scale) * canvas.width * 500));
 
-                // Draw comet tail (pointing away from star)
+                // Draw comet tail (points away from star)
                 if (planet.type === 'comet') {
                     const distToStar = Math.sqrt(planet.x * planet.x + planet.y * planet.y);
                     // Tail gets longer when closer to star
@@ -1178,12 +1379,13 @@
                     ctx.fill();
                 }
 
+                // Draw planet body
                 ctx.beginPath();
                 ctx.arc(px, py, planetRadius, 0, Math.PI * 2);
                 ctx.fillStyle = planet.color;
                 ctx.fill();
 
-                // Selection indicator
+                // Selection indicator (white ring)
                 if (selectedPlanet === i) {
                     ctx.beginPath();
                     ctx.arc(px, py, planetRadius + 5, 0, Math.PI * 2);
@@ -1199,8 +1401,14 @@
             ctx.fillText(`Scale: ${(scale / AU).toFixed(1)} AU`, 10, canvas.height - 10);
         }
 
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  ANIMATION LOOP
+         * ═══════════════════════════════════════════════════════════════════
+         */
         function animate() {
             if (running) {
+                // Run multiple timesteps per frame (controlled by timeScale)
                 for (let i = 0; i < timeScale; i++) {
                     step();
                 }
@@ -1211,7 +1419,11 @@
             requestAnimationFrame(animate);
         }
 
-        // Start
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  START SIMULATION
+         * ═══════════════════════════════════════════════════════════════════
+         */
         init();
     </script>
 </body>

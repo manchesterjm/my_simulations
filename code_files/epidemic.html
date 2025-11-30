@@ -1,3 +1,38 @@
+<!--
+╔════════════════════════════════════════════════════════════════════════════╗
+║                       SIRD EPIDEMIC SIMULATION                             ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+DESCRIPTION:
+This is an interactive agent-based epidemic simulation that models the spread
+of an infectious disease through a population using the SIRD model:
+  - Susceptible (S): Healthy individuals who can become infected
+  - Infected (I): Currently infectious individuals who can spread the disease
+  - Recovered (R): Individuals who have recovered and gained immunity
+  - Dead (D): Individuals who died from the disease
+
+VISUALIZATION:
+  - Left canvas: Real-time view of agents moving in 2D space
+    - Blue dots: Susceptible individuals
+    - Red dots: Infected individuals (with visible infection radius)
+    - Green dots: Recovered individuals
+    - Black dots: Dead individuals (stationary)
+  - Right canvas: Time-series chart showing population changes over time
+
+SIMULATION MECHANICS:
+  - Agents move randomly in a bounded 2D world using random walk with momentum
+  - When infected and susceptible agents are within infection radius, there's
+    a probability of transmission
+  - Infected agents recover or die after a specified number of days
+  - Dead agents stop moving; all others continue moving
+  - The R₀ value estimates how many people each infected person infects
+
+INTERACTIVITY:
+  - Adjust infection rate, recovery time, mortality rate, and population size
+  - Inject new infections during the simulation
+  - Control simulation speed and pause/resume
+  - Reset to start over with new parameters
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,68 +40,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Epidemic Simulation</title>
     <style>
+        /* ===== GLOBAL STYLES ===== */
+        /* Dark theme with modern font stack and centered layout */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a2e;
-            color: #eee;
+            background: #1a1a2e; /* Dark navy background for better contrast */
+            color: #eee; /* Light text for readability */
             margin: 0;
             padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh;
+            min-height: 100vh; /* Full viewport height */
         }
+
+        /* ===== HEADER STYLES ===== */
         h1 {
             margin-bottom: 10px;
-            color: #e63946;
+            color: #e63946; /* Red theme matching infected color */
         }
         .subtitle {
-            color: #888;
+            color: #888; /* Muted gray for secondary text */
             margin-bottom: 20px;
             text-align: center;
         }
+
+        /* ===== LAYOUT CONTAINERS ===== */
+        /* Flexbox layout for side-by-side canvas display */
         .container {
             display: flex;
             gap: 20px;
-            flex-wrap: wrap;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
             justify-content: center;
         }
+
+        /* ===== CANVAS STYLING ===== */
+        /* Black background for visualization clarity */
         canvas {
-            border: 2px solid #333;
-            background: #000;
+            border: 2px solid #333; /* Subtle border to define canvas edges */
+            background: #000; /* Pure black for high contrast */
         }
+
         .chart-container {
             display: flex;
             flex-direction: column;
             align-items: center;
         }
+
         .chart-title {
             font-size: 14px;
-            color: #aaa;
+            color: #aaa; /* Subdued color for labels */
             margin-bottom: 5px;
         }
+
+        /* ===== CONTROL PANEL STYLES ===== */
+        /* Interactive controls for adjusting simulation parameters */
         .controls {
             margin-top: 20px;
             display: flex;
             gap: 20px;
-            flex-wrap: wrap;
+            flex-wrap: wrap; /* Stack on narrow screens */
             justify-content: center;
         }
+
         .control-group {
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 5px;
         }
+
         label {
             font-size: 12px;
             color: #888;
         }
+
         input[type="range"] {
             width: 120px;
         }
+
+        /* ===== BUTTON STYLES ===== */
+        /* Red theme with hover effects for interactivity */
         button {
-            background: #e63946;
+            background: #e63946; /* Matches infected color theme */
             color: white;
             border: none;
             padding: 10px 20px;
@@ -74,44 +130,59 @@
             cursor: pointer;
             font-size: 14px;
         }
+
         button:hover {
-            background: #f25c69;
+            background: #f25c69; /* Lighter red on hover */
         }
+
+        /* ===== STATISTICS DISPLAY ===== */
         .stats {
             margin-top: 15px;
             font-size: 14px;
             color: #aaa;
         }
+
+        /* ===== LEGEND STYLES ===== */
+        /* Color-coded legend showing state meanings */
         .legend {
             display: flex;
             gap: 20px;
             margin-top: 10px;
         }
+
         .legend-item {
             display: flex;
             align-items: center;
             gap: 5px;
             font-size: 12px;
         }
+
         .legend-color {
             width: 16px;
             height: 16px;
-            border-radius: 50%;
+            border-radius: 50%; /* Circular dots matching agent rendering */
         }
-        .susceptible { color: #457b9d; }
-        .infected { color: #e63946; }
-        .recovered { color: #2a9d8f; }
-        .dead { color: #666; }
+
+        /* Color classes matching agent states */
+        .susceptible { color: #457b9d; } /* Blue */
+        .infected { color: #e63946; }    /* Red */
+        .recovered { color: #2a9d8f; }   /* Green */
+        .dead { color: #666; }           /* Gray */
     </style>
 </head>
 <body>
+    <!-- ===== PAGE HEADER ===== -->
     <h1>SIRD Epidemic Simulation</h1>
     <p class="subtitle">Agent-Based Model - Susceptible → Infected → Recovered / Dead<br>
     Agents move randomly and can infect nearby susceptible individuals</p>
 
+    <!-- ===== VISUALIZATION AREA ===== -->
+    <!-- Two side-by-side canvases: agent grid and population chart -->
     <div class="container">
+        <!-- Left: Agent simulation canvas showing individual movement -->
         <div class="chart-container">
             <canvas id="gridCanvas"></canvas>
+            <!-- Color legend for interpreting agent states -->
             <div class="legend">
                 <div class="legend-item">
                     <div class="legend-color" style="background: #457b9d;"></div>
@@ -131,140 +202,184 @@
                 </div>
             </div>
         </div>
+        <!-- Right: Time-series chart of SIRD populations -->
         <div class="chart-container">
             <div class="chart-title">Population Over Time</div>
             <canvas id="chartCanvas"></canvas>
         </div>
     </div>
 
+    <!-- ===== STATISTICS DISPLAY ===== -->
+    <!-- Real-time stats showing current simulation state -->
     <div class="stats">
         Day: <span id="day">0</span> |
         <span class="susceptible">Susceptible: <span id="susceptible">0</span></span> |
         <span class="infected">Infected: <span id="infected">0</span></span> |
         <span class="recovered">Recovered: <span id="recovered">0</span></span> |
         <span class="dead">Dead: <span id="dead">0</span></span> |
-        R₀ ≈ <span id="r0">0</span>
+        R₀ ≈ <span id="r0">0</span> <!-- Basic reproduction number estimate -->
     </div>
 
+    <!-- ===== CONTROL PANEL ===== -->
+    <!-- Interactive controls for simulation parameters -->
     <div class="controls">
+        <!-- Simulation speed control (steps per second) -->
         <div class="control-group">
             <label>Speed: <span id="speedVal">20</span> steps/sec</label>
             <input type="range" id="speed" min="1" max="500" value="20">
         </div>
+        <!-- Infection probability per contact (higher = faster spread) -->
         <div class="control-group">
             <label>Infection Rate: <span id="infectionVal">3</span>%</label>
             <input type="range" id="infection" min="1" max="20" value="3">
         </div>
+        <!-- Days infected before recovering or dying -->
         <div class="control-group">
             <label>Recovery Days: <span id="recoveryVal">14</span></label>
             <input type="range" id="recovery" min="3" max="30" value="14">
         </div>
+        <!-- Probability of dying vs. recovering -->
         <div class="control-group">
             <label>Mortality: <span id="mortalityVal">2</span>%</label>
             <input type="range" id="mortality" min="0" max="50" value="2">
         </div>
+        <!-- Total population size -->
         <div class="control-group">
             <label>Population: <span id="popVal">10000</span></label>
             <input type="range" id="population" min="100" max="50000" step="500" value="10000">
         </div>
+        <!-- Action buttons for simulation control -->
         <button id="inject" style="background: #9d4edd;">Inject Infection</button>
         <button id="reset">Reset</button>
         <button id="pause">Pause</button>
     </div>
 
+    <!-- ===== SIMULATION JAVASCRIPT ===== -->
     <script>
-        // Constants
-        const SUSCEPTIBLE = 0;
-        const INFECTED = 1;
-        const RECOVERED = 2;
-        const DEAD = 3;
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  CONSTANTS AND CONFIGURATION
+         * ═══════════════════════════════════════════════════════════════════
+         */
 
-        // Configuration
-        const WORLD_SIZE = 600;
-        const CHART_WIDTH = 400;
-        const CHART_HEIGHT = 300;
-        const AGENT_RADIUS = 2;
-        const INFECTION_RADIUS = 15;
+        // Agent state constants (used to identify current health status)
+        const SUSCEPTIBLE = 0;  // Healthy, can be infected
+        const INFECTED = 1;     // Currently sick and infectious
+        const RECOVERED = 2;    // Immune after recovery
+        const DEAD = 3;         // Deceased, no longer participates
 
-        // Colors
+        // Visualization configuration
+        const WORLD_SIZE = 600;        // Canvas size for agent world (pixels)
+        const CHART_WIDTH = 400;       // Time-series chart width
+        const CHART_HEIGHT = 300;      // Time-series chart height
+        const AGENT_RADIUS = 2;        // Visual size of each agent
+        const INFECTION_RADIUS = 15;   // Distance within which infection can spread
+
+        // Color mapping for agent states
         const COLORS = {
-            [SUSCEPTIBLE]: '#457b9d',
-            [INFECTED]: '#e63946',
-            [RECOVERED]: '#2a9d8f',
-            [DEAD]: '#1a1a1a'
+            [SUSCEPTIBLE]: '#457b9d',  // Blue
+            [INFECTED]: '#e63946',     // Red
+            [RECOVERED]: '#2a9d8f',    // Green
+            [DEAD]: '#1a1a1a'          // Dark gray
         };
 
-        // Canvas setup
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  CANVAS SETUP
+         * ═══════════════════════════════════════════════════════════════════
+         */
+
+        // Agent world canvas (left side) - shows moving dots
         const gridCanvas = document.getElementById('gridCanvas');
         const gridCtx = gridCanvas.getContext('2d');
         gridCanvas.width = WORLD_SIZE;
         gridCanvas.height = WORLD_SIZE;
 
+        // Time-series chart canvas (right side) - shows population curves
         const chartCanvas = document.getElementById('chartCanvas');
         const chartCtx = chartCanvas.getContext('2d');
         chartCanvas.width = CHART_WIDTH;
         chartCanvas.height = CHART_HEIGHT;
 
-        // Simulation state
-        let agents = [];
-        let day = 0;
-        let history = { susceptible: [], infected: [], recovered: [], dead: [] };
-        let totalInfections = 0;
-        let paused = false;
-        let lastTime = 0;
-        let stepsPerSecond = 20;
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  SIMULATION STATE VARIABLES
+         * ═══════════════════════════════════════════════════════════════════
+         */
 
-        // Parameters
-        let populationSize = 10000;
-        let infectionProb = 0.03;
-        let recoveryDays = 14;
-        let mortalityRate = 0.02;
+        let agents = [];          // Array of all Agent objects
+        let day = 0;              // Current simulation day
+        let history = {           // Historical data for charting
+            susceptible: [],
+            infected: [],
+            recovered: [],
+            dead: []
+        };
+        let totalInfections = 0;  // Cumulative infections (for R₀ calculation)
+        let paused = false;       // Animation pause state
+        let lastTime = 0;         // Last animation frame timestamp
+        let stepsPerSecond = 20;  // Simulation speed control
 
-        // Agent class
+        // Simulation parameters (adjustable via sliders)
+        let populationSize = 10000;   // Total number of agents
+        let infectionProb = 0.03;     // Probability of transmission per contact (3%)
+        let recoveryDays = 14;        // Days until recovery/death
+        let mortalityRate = 0.02;     // Probability of death vs recovery (2%)
+
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  AGENT CLASS - Represents individual in simulation
+         * ═══════════════════════════════════════════════════════════════════
+         *  Each agent has position, velocity, state, and infection tracking.
+         *  Agents move using random walk with momentum and bounce off walls.
+         */
         class Agent {
             constructor(x, y, state = SUSCEPTIBLE) {
-                this.x = x;
-                this.y = y;
-                this.state = state;
-                this.daysInfected = 0;
-                this.vx = (Math.random() - 0.5) * 4;
-                this.vy = (Math.random() - 0.5) * 4;
+                this.x = x;                              // X position in world
+                this.y = y;                              // Y position in world
+                this.state = state;                      // Current health state
+                this.daysInfected = 0;                   // Days since infection
+                this.vx = (Math.random() - 0.5) * 4;     // X velocity (random)
+                this.vy = (Math.random() - 0.5) * 4;     // Y velocity (random)
             }
 
+            // Update agent state each day (check for recovery/death)
             update() {
                 if (this.state === INFECTED) {
                     this.daysInfected++;
+                    // After recovery period, agent either dies or recovers
                     if (this.daysInfected >= recoveryDays) {
-                        // Check if agent dies or recovers
                         if (Math.random() < mortalityRate) {
                             this.state = DEAD;
-                            this.vx = 0;
+                            this.vx = 0;  // Dead agents stop moving
                             this.vy = 0;
                         } else {
-                            this.state = RECOVERED;
+                            this.state = RECOVERED;  // Gained immunity
                         }
                     }
                 }
             }
 
+            // Move agent using random walk with momentum
             move() {
-                if (this.state === DEAD) return; // Dead agents don't move
+                if (this.state === DEAD) return; // Dead agents are stationary
 
-                // Random walk with momentum
+                // Add random acceleration for Brownian-like motion
                 this.vx += (Math.random() - 0.5) * 0.5;
                 this.vy += (Math.random() - 0.5) * 0.5;
 
-                // Limit speed
+                // Limit maximum speed to prevent too-fast movement
                 const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
                 if (speed > 3) {
-                    this.vx = (this.vx / speed) * 3;
+                    this.vx = (this.vx / speed) * 3;  // Normalize and scale
                     this.vy = (this.vy / speed) * 3;
                 }
 
+                // Update position based on velocity
                 this.x += this.vx;
                 this.y += this.vy;
 
-                // Bounce off walls
+                // Bounce off walls (reverse velocity at boundaries)
                 if (this.x < AGENT_RADIUS) { this.x = AGENT_RADIUS; this.vx *= -1; }
                 if (this.x > WORLD_SIZE - AGENT_RADIUS) { this.x = WORLD_SIZE - AGENT_RADIUS; this.vx *= -1; }
                 if (this.y < AGENT_RADIUS) { this.y = AGENT_RADIUS; this.vy *= -1; }
@@ -272,70 +387,91 @@
             }
         }
 
-        // Initialize simulation
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  SIMULATION INITIALIZATION
+         * ═══════════════════════════════════════════════════════════════════
+         *  Creates population with random positions and a few initial infections
+         */
         function initSimulation() {
             agents = [];
+            // Create agents at random positions throughout the world
             for (let i = 0; i < populationSize; i++) {
                 const x = Math.random() * (WORLD_SIZE - 2 * AGENT_RADIUS) + AGENT_RADIUS;
                 const y = Math.random() * (WORLD_SIZE - 2 * AGENT_RADIUS) + AGENT_RADIUS;
                 agents.push(new Agent(x, y, SUSCEPTIBLE));
             }
 
-            // Start with a few infected
+            // Infect 1% of population to start the epidemic
             const initialInfected = Math.max(1, Math.floor(populationSize * 0.01));
             for (let i = 0; i < initialInfected; i++) {
                 agents[i].state = INFECTED;
             }
 
+            // Reset simulation counters
             day = 0;
             history = { susceptible: [], infected: [], recovered: [], dead: [] };
             totalInfections = initialInfected;
         }
 
-        // Check infections
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  INFECTION SPREAD MECHANICS
+         * ═══════════════════════════════════════════════════════════════════
+         *  Checks all infected-susceptible pairs for proximity-based transmission
+         */
         function checkInfections() {
+            // Get all currently infected and susceptible agents
             const infected = agents.filter(a => a.state === INFECTED);
             const susceptible = agents.filter(a => a.state === SUSCEPTIBLE);
 
+            // Check every infected-susceptible pair for potential transmission
             for (const inf of infected) {
                 for (const sus of susceptible) {
+                    // Calculate Euclidean distance between agents
                     const dx = inf.x - sus.x;
                     const dy = inf.y - sus.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
 
+                    // Infection occurs if within radius AND random probability check
                     if (dist < INFECTION_RADIUS && Math.random() < infectionProb) {
                         sus.state = INFECTED;
-                        totalInfections++;
+                        totalInfections++;  // Track for R₀ calculation
                     }
                 }
             }
         }
 
-        // Simulation step
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  SIMULATION STEP - Main update loop
+         * ═══════════════════════════════════════════════════════════════════
+         *  Executes one day of simulation: movement → infection → state updates
+         */
         function simulationStep() {
-            // Move all agents
+            // 1. Move all agents (random walk)
             for (const agent of agents) {
                 agent.move();
             }
 
-            // Check infections
+            // 2. Check for new infections based on proximity
             checkInfections();
 
-            // Update agent states
+            // 3. Update agent states (recovery/death after infection period)
             for (const agent of agents) {
                 agent.update();
             }
 
             day++;
 
-            // Record history
+            // 4. Record population counts for time-series chart
             const counts = countStates();
             history.susceptible.push(counts.susceptible);
             history.infected.push(counts.infected);
             history.recovered.push(counts.recovered);
             history.dead.push(counts.dead);
 
-            // Limit history length
+            // 5. Limit history to prevent memory issues (sliding window)
             const maxHistory = 500;
             if (history.susceptible.length > maxHistory) {
                 history.susceptible.shift();
@@ -345,7 +481,13 @@
             }
         }
 
-        // Count agents by state
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  STATISTICS CALCULATION
+         * ═══════════════════════════════════════════════════════════════════
+         */
+
+        // Count how many agents are in each state
         function countStates() {
             let susceptible = 0, infected = 0, recovered = 0, dead = 0;
             for (const agent of agents) {
@@ -357,12 +499,19 @@
             return { susceptible, infected, recovered, dead };
         }
 
-        // Render agents
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  RENDERING - Agent World Canvas
+         * ═══════════════════════════════════════════════════════════════════
+         *  Draws all agents as colored dots with infection radius visualization
+         */
         function renderAgents() {
+            // Clear canvas with dark background
             gridCtx.fillStyle = '#0a0a15';
             gridCtx.fillRect(0, 0, WORLD_SIZE, WORLD_SIZE);
 
-            // Draw infection radius for infected agents (subtle)
+            // First pass: Draw infection radius circles (semi-transparent red)
+            // This shows the "danger zone" around each infected individual
             gridCtx.fillStyle = 'rgba(230, 57, 70, 0.1)';
             for (const agent of agents) {
                 if (agent.state === INFECTED) {
@@ -372,7 +521,7 @@
                 }
             }
 
-            // Draw agents
+            // Second pass: Draw agents as small colored circles
             for (const agent of agents) {
                 gridCtx.fillStyle = COLORS[agent.state];
                 gridCtx.beginPath();
@@ -381,18 +530,25 @@
             }
         }
 
-        // Render SIR chart
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  RENDERING - Time-Series Chart
+         * ═══════════════════════════════════════════════════════════════════
+         *  Plots SIRD populations over time as line chart
+         */
         function renderChart() {
+            // Clear chart background
             chartCtx.fillStyle = '#0a0a15';
             chartCtx.fillRect(0, 0, CHART_WIDTH, CHART_HEIGHT);
 
+            // Need at least 2 data points to draw lines
             if (history.susceptible.length < 2) return;
 
             const padding = 40;
             const chartW = CHART_WIDTH - padding * 2;
             const chartH = CHART_HEIGHT - padding * 2;
 
-            // Draw axes
+            // Draw coordinate axes (L-shaped)
             chartCtx.strokeStyle = '#444';
             chartCtx.lineWidth = 1;
             chartCtx.beginPath();
@@ -401,22 +557,25 @@
             chartCtx.lineTo(CHART_WIDTH - padding, CHART_HEIGHT - padding);
             chartCtx.stroke();
 
-            // Draw labels
+            // Draw axis labels
             chartCtx.fillStyle = '#888';
             chartCtx.font = '12px sans-serif';
             chartCtx.textAlign = 'center';
             chartCtx.fillText('Time (days)', CHART_WIDTH / 2, CHART_HEIGHT - 10);
 
-            // Draw lines
+            // Plot all four population curves
             const len = history.susceptible.length;
-            const maxVal = populationSize;
+            const maxVal = populationSize;  // Y-axis maximum
 
+            // Helper function to draw a single colored line
             function drawLine(data, color) {
                 chartCtx.strokeStyle = color;
                 chartCtx.lineWidth = 2;
                 chartCtx.beginPath();
                 for (let i = 0; i < data.length; i++) {
+                    // Map data index to X position (time axis)
                     const x = padding + (i / (len - 1 || 1)) * chartW;
+                    // Map data value to Y position (population axis, inverted)
                     const y = CHART_HEIGHT - padding - (data[i] / maxVal) * chartH;
                     if (i === 0) chartCtx.moveTo(x, y);
                     else chartCtx.lineTo(x, y);
@@ -424,13 +583,20 @@
                 chartCtx.stroke();
             }
 
+            // Draw all four population curves in their respective colors
             drawLine(history.susceptible, COLORS[SUSCEPTIBLE]);
             drawLine(history.infected, COLORS[INFECTED]);
             drawLine(history.recovered, COLORS[RECOVERED]);
             drawLine(history.dead, COLORS[DEAD]);
         }
 
-        // Update stats
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  UI UPDATES
+         * ═══════════════════════════════════════════════════════════════════
+         */
+
+        // Update statistics display with current counts
         function updateStats() {
             const counts = countStates();
             document.getElementById('day').textContent = day;
@@ -439,53 +605,73 @@
             document.getElementById('recovered').textContent = counts.recovered;
             document.getElementById('dead').textContent = counts.dead;
 
-            // Estimate R0
+            // Estimate R₀ (basic reproduction number):
+            // Total infections / number who have recovered or died
+            // This gives average number of people each infected person infects
             const resolved = counts.recovered + counts.dead;
             const r0 = resolved > 0 ? (totalInfections / Math.max(1, resolved)).toFixed(2) : '...';
             document.getElementById('r0').textContent = r0;
         }
 
-        // Animation loop
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  ANIMATION LOOP
+         * ═══════════════════════════════════════════════════════════════════
+         *  Uses requestAnimationFrame for smooth 60 FPS rendering
+         */
         function animate(timestamp) {
             if (!paused) {
+                // Calculate how many simulation steps to run per frame
+                // (allows speed control independent of frame rate)
                 const stepsPerFrame = Math.max(1, Math.floor(stepsPerSecond / 60));
                 for (let i = 0; i < stepsPerFrame; i++) {
                     simulationStep();
                 }
                 renderAgents();
-                if (day % 3 === 0) renderChart();
+                if (day % 3 === 0) renderChart();  // Chart updates every 3 days (performance)
                 updateStats();
                 lastTime = timestamp;
             }
-            requestAnimationFrame(animate);
+            requestAnimationFrame(animate);  // Request next frame
         }
 
-        // Event listeners
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  EVENT HANDLERS - User Interaction
+         * ═══════════════════════════════════════════════════════════════════
+         */
+
+        // Speed slider - adjusts simulation timesteps per second
         document.getElementById('speed').addEventListener('input', (e) => {
             stepsPerSecond = parseInt(e.target.value);
             document.getElementById('speedVal').textContent = stepsPerSecond;
         });
 
+        // Infection rate slider - probability of transmission per contact
         document.getElementById('infection').addEventListener('input', (e) => {
             infectionProb = parseInt(e.target.value) / 100;
             document.getElementById('infectionVal').textContent = e.target.value;
         });
 
+        // Recovery days slider - how long infection lasts
         document.getElementById('recovery').addEventListener('input', (e) => {
             recoveryDays = parseInt(e.target.value);
             document.getElementById('recoveryVal').textContent = e.target.value;
         });
 
+        // Mortality rate slider - probability of death vs recovery
         document.getElementById('mortality').addEventListener('input', (e) => {
             mortalityRate = parseInt(e.target.value) / 100;
             document.getElementById('mortalityVal').textContent = e.target.value;
         });
 
+        // Population slider - only affects new simulations (requires reset)
         document.getElementById('population').addEventListener('input', (e) => {
             populationSize = parseInt(e.target.value);
             document.getElementById('popVal').textContent = e.target.value;
         });
 
+        // Inject infection button - adds new infections to running simulation
         document.getElementById('inject').addEventListener('click', () => {
             // Infect 5% of susceptible agents (minimum 10)
             const susceptible = agents.filter(a => a.state === SUSCEPTIBLE);
@@ -493,11 +679,12 @@
             for (let i = 0; i < numToInfect; i++) {
                 const idx = Math.floor(Math.random() * susceptible.length);
                 susceptible[idx].state = INFECTED;
-                susceptible.splice(idx, 1);
+                susceptible.splice(idx, 1);  // Remove from array to avoid re-infection
                 totalInfections++;
             }
         });
 
+        // Reset button - restart simulation with current parameters
         document.getElementById('reset').addEventListener('click', () => {
             initSimulation();
             renderAgents();
@@ -505,12 +692,17 @@
             updateStats();
         });
 
+        // Pause/Resume button - toggle animation
         document.getElementById('pause').addEventListener('click', (e) => {
             paused = !paused;
             e.target.textContent = paused ? 'Resume' : 'Pause';
         });
 
-        // Start
+        /*
+         * ═══════════════════════════════════════════════════════════════════
+         *  INITIALIZATION - Start simulation on page load
+         * ═══════════════════════════════════════════════════════════════════
+         */
         initSimulation();
         renderAgents();
         renderChart();

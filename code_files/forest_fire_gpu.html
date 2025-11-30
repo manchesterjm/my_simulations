@@ -1,3 +1,21 @@
+<!--
+    FOREST FIRE SIMULATION (GPU-ACCELERATED)
+    =========================================
+    Demonstrates self-organized criticality using the Drossel-Schwabl forest fire model.
+    Trees grow spontaneously, lightning strikes cause fires, and fires spread to adjacent
+    trees. At critical parameters, fire size distribution follows a power law.
+
+    Key Features:
+    - WebGL GPU rendering for smooth visualization of large grids (up to 800x800)
+    - Real-time fire size distribution in log-log plot showing power law behavior
+    - Adjustable parameters: tree growth rate, lightning probability, grid size
+    - Manual lightning strike button for experimentation
+
+    Physics:
+    - Self-organized criticality: system naturally evolves to critical state
+    - Power law distribution: P(fire size = s) ~ s^(-α) for some α
+    - Phase transition behavior similar to percolation theory
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,6 +23,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Forest Fire (GPU)</title>
     <style>
+        /* ===== GLOBAL STYLES ===== */
+        /* Dark theme for better contrast with simulation colors */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #1a1a2e;
@@ -15,32 +35,50 @@
             flex-direction: column;
             align-items: center;
         }
-        h1 { margin-bottom: 10px; color: #ff6b35; }
+
+        /* ===== HEADER STYLES ===== */
+        h1 { margin-bottom: 10px; color: #ff6b35; }  /* Orange-red to match fire theme */
         .subtitle { color: #888; margin-bottom: 20px; }
+
+        /* ===== LAYOUT STYLES ===== */
+        /* Side-by-side layout for grid visualization and distribution chart */
         .container { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
         canvas { border: 2px solid #333; }
         .panel { display: flex; flex-direction: column; align-items: center; }
         .panel-title { font-size: 14px; color: #aaa; margin-bottom: 5px; }
+
+        /* ===== CONTROL PANEL STYLES ===== */
+        /* Flexible wrapping layout for responsive design */
         .controls { margin-top: 20px; display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
         .control-group { display: flex; flex-direction: column; align-items: center; gap: 5px; }
         label { font-size: 12px; color: #888; }
         input[type="range"] { width: 120px; }
+
+        /* Fire-themed orange buttons with hover effect */
         button { background: #ff6b35; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px; }
         button:hover { background: #ff8c5a; }
+
+        /* ===== STATISTICS AND LEGEND STYLES ===== */
         .stats { margin-top: 15px; font-size: 14px; color: #aaa; }
         .legend { display: flex; gap: 15px; margin-top: 10px; }
         .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
         .legend-color { width: 16px; height: 16px; border-radius: 3px; }
+
+        /* Green badge to indicate GPU acceleration */
         .gpu-badge { background: #4CAF50; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 10px; }
     </style>
 </head>
 <body>
+    <!-- ===== PAGE HEADER ===== -->
     <h1>Forest Fire Simulation <span class="gpu-badge">WebGL GPU</span></h1>
     <p class="subtitle">Self-Organized Criticality - Drossel-Schwabl Model</p>
 
+    <!-- ===== VISUALIZATION CONTAINERS ===== -->
+    <!-- Left: WebGL canvas for grid, Right: 2D canvas for log-log distribution -->
     <div class="container">
         <div class="panel">
             <canvas id="glCanvas"></canvas>
+            <!-- Color legend showing cell states -->
             <div class="legend">
                 <div class="legend-item"><div class="legend-color" style="background: #1a1a1a;"></div>Empty</div>
                 <div class="legend-item"><div class="legend-color" style="background: #228b22;"></div>Tree</div>
@@ -53,6 +91,8 @@
         </div>
     </div>
 
+    <!-- ===== STATISTICS DISPLAY ===== -->
+    <!-- Real-time stats: steps, tree count, density, fires, FPS -->
     <div class="stats">
         Step: <span id="step">0</span> |
         Trees: <span id="trees">0</span> |
@@ -62,6 +102,8 @@
         FPS: <span id="fps">0</span>
     </div>
 
+    <!-- ===== CONTROL PANEL ===== -->
+    <!-- Sliders for speed, grid size, tree growth, lightning probability -->
     <div class="controls">
         <div class="control-group">
             <label>Speed: <span id="speedVal">60</span>/sec</label>
@@ -85,45 +127,52 @@
     </div>
 
     <script>
+        // ===== SIMULATION CONSTANTS =====
+        // Three cell states: 0=empty (black), 1=tree (green), 2=burning (red)
         const EMPTY = 0, TREE = 1, BURNING = 2;
 
-        // WebGL setup
+        // ===== WEBGL SETUP =====
+        // GPU-accelerated rendering for smooth visualization of large grids
         const glCanvas = document.getElementById('glCanvas');
         let GRID_SIZE = 400;
         glCanvas.width = GRID_SIZE;
         glCanvas.height = GRID_SIZE;
         const gl = glCanvas.getContext('webgl');
 
+        // Separate 2D canvas for log-log distribution chart
         const chartCanvas = document.getElementById('chartCanvas');
         const chartCtx = chartCanvas.getContext('2d');
         chartCanvas.width = 350;
         chartCanvas.height = 300;
 
-        // Shaders
+        // ===== WEBGL SHADERS =====
+        // Vertex shader: transforms grid positions to clip space
+        // Fragment shader: colors cells based on state (empty/tree/burning)
         const vsSource = `
-            attribute vec2 a_position;
-            attribute float a_state;
-            uniform vec2 u_resolution;
-            varying float v_state;
+            attribute vec2 a_position;      // Cell position in grid coordinates
+            attribute float a_state;         // Cell state (0, 1, or 2)
+            uniform vec2 u_resolution;       // Grid dimensions
+            varying float v_state;           // Pass state to fragment shader
             void main() {
-                vec2 clipSpace = (a_position / u_resolution) * 2.0 - 1.0;
-                gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
-                gl_PointSize = 1.0;
+                vec2 clipSpace = (a_position / u_resolution) * 2.0 - 1.0;  // Convert to clip space [-1, 1]
+                gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);         // Flip Y-axis
+                gl_PointSize = 1.0;  // Each cell is 1 pixel
                 v_state = a_state;
             }
         `;
         const fsSource = `
             precision mediump float;
-            varying float v_state;
+            varying float v_state;  // Received from vertex shader
             void main() {
                 vec3 color;
-                if (v_state < 0.5) color = vec3(0.1, 0.1, 0.1);
-                else if (v_state < 1.5) color = vec3(0.13, 0.55, 0.13);
-                else color = vec3(1.0, 0.27, 0.0);
+                if (v_state < 0.5) color = vec3(0.1, 0.1, 0.1);         // EMPTY: dark gray
+                else if (v_state < 1.5) color = vec3(0.13, 0.55, 0.13); // TREE: forest green
+                else color = vec3(1.0, 0.27, 0.0);                       // BURNING: orange-red
                 gl_FragColor = vec4(color, 1.0);
             }
         `;
 
+        // Helper function to compile GLSL shaders
         function createShader(gl, type, source) {
             const shader = gl.createShader(type);
             gl.shaderSource(shader, source);
@@ -131,6 +180,7 @@
             return shader;
         }
 
+        // Compile and link shader program
         const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
         const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
         const program = gl.createProgram();
@@ -139,14 +189,19 @@
         gl.linkProgram(program);
         gl.useProgram(program);
 
+        // Get attribute and uniform locations for data upload
         const posLoc = gl.getAttribLocation(program, 'a_position');
         const stateLoc = gl.getAttribLocation(program, 'a_state');
         const resLoc = gl.getUniformLocation(program, 'u_resolution');
 
+        // Create GPU buffers for position and state data
         const posBuf = gl.createBuffer();
         const stateBuf = gl.createBuffer();
 
-        // State
+        // ===== SIMULATION STATE =====
+        // Grid: Uint8Array for memory efficiency
+        // Positions: pre-computed pixel coordinates for WebGL
+        // States: float array for GPU upload
         let grid, positions, states;
         let step = 0;
         let fireSizes = [];
@@ -154,10 +209,12 @@
         let currentFireSize = 0;
         let paused = true;
         let stepsPerSecond = 60;
-        let treeGrowth = 0.01;
-        let lightning = 0.0001;
+        let treeGrowth = 0.01;       // Probability per cell per step: 1%
+        let lightning = 0.0001;       // Probability per tree per step: 0.01%
         let lastFpsTime = 0, frameCount = 0, fps = 0;
 
+        // ===== INITIALIZATION =====
+        // Create grid with random 50% tree density
         function initGrid() {
             const n = GRID_SIZE * GRID_SIZE;
             grid = new Uint8Array(n);
@@ -179,6 +236,8 @@
             currentFireSize = 0;
         }
 
+        // ===== SIMULATION LOGIC =====
+        // Get 8 neighbors (Moore neighborhood) with boundary checking
         function getNeighbors(idx) {
             const i = Math.floor(idx / GRID_SIZE);
             const j = idx % GRID_SIZE;
@@ -195,6 +254,8 @@
             return neighbors;
         }
 
+        // Fire spreading: burning cells ignite adjacent trees, then become empty
+        // Returns true if fire is still active
         function spreadFireStep() {
             const newBurning = [];
             const toEmpty = [];
@@ -210,6 +271,7 @@
                 }
             }
 
+            // Update grid: burning → empty, new trees → burning
             for (const idx of toEmpty) grid[idx] = EMPTY;
             for (const idx of newBurning) {
                 if (grid[idx] === TREE) {
@@ -218,6 +280,7 @@
                 }
             }
 
+            // Fire ended: record size for power law distribution
             if (newBurning.length === 0 && currentFireSize > 0) {
                 fireSizes.push(currentFireSize);
                 if (currentFireSize > largestFire) largestFire = currentFireSize;
@@ -234,18 +297,19 @@
             return false;
         }
 
+        // Main simulation step: either spread existing fire or grow trees & strike lightning
         function simulationStep() {
             if (hasBurning()) {
-                spreadFireStep();
+                spreadFireStep();  // Fire propagates until it burns out
             } else {
                 step++;
-                // Grow trees
+                // Tree growth: each empty cell has treeGrowth probability
                 for (let i = 0; i < grid.length; i++) {
                     if (grid[i] === EMPTY && Math.random() < treeGrowth) {
                         grid[i] = TREE;
                     }
                 }
-                // Lightning
+                // Lightning strike: probabilistic based on number of trees
                 const trees = [];
                 for (let i = 0; i < grid.length; i++) {
                     if (grid[i] === TREE) trees.push(i);
@@ -256,10 +320,11 @@
                     currentFireSize = 1;
                 }
             }
-            // Update states array
+            // Sync float array with grid for GPU upload
             for (let i = 0; i < grid.length; i++) states[i] = grid[i];
         }
 
+        // Manual lightning strike (for user interaction)
         function lightningStrike() {
             const trees = [];
             for (let i = 0; i < grid.length; i++) {
@@ -273,6 +338,8 @@
             }
         }
 
+        // ===== RENDERING =====
+        // Upload grid data to GPU and draw as points
         function render() {
             gl.viewport(0, 0, GRID_SIZE, GRID_SIZE);
             gl.clearColor(0.04, 0.04, 0.08, 1);
@@ -292,6 +359,7 @@
             gl.drawArrays(gl.POINTS, 0, GRID_SIZE * GRID_SIZE);
         }
 
+        // Draw log-log plot of fire size distribution (power law check)
         function renderChart() {
             const W = chartCanvas.width, H = chartCanvas.height;
             chartCtx.fillStyle = '#0a0a15';
@@ -305,6 +373,7 @@
                 return;
             }
 
+            // Bin fire sizes and count frequencies
             const counts = {};
             for (const s of fireSizes) counts[s] = (counts[s] || 0) + 1;
             const sizes = Object.keys(counts).map(Number).sort((a,b) => a-b);
@@ -312,6 +381,7 @@
 
             const pad = 50;
             const cw = W - 2*pad, ch = H - 2*pad;
+            // Log-log scale for power law visualization
             const logMinS = Math.log10(Math.max(1, sizes[0]));
             const logMaxS = Math.log10(sizes[sizes.length-1]);
             const logMinF = Math.log10(Math.max(1, Math.min(...freqs)));
@@ -352,6 +422,8 @@
             document.getElementById('fps').textContent = fps;
         }
 
+        // ===== ANIMATION LOOP =====
+        // Main loop: step simulation at specified rate, render, update stats
         function animate(ts) {
             frameCount++;
             if (ts - lastFpsTime >= 1000) {
@@ -360,7 +432,7 @@
                 lastFpsTime = ts;
             }
             if (!paused) {
-                const spf = Math.max(1, Math.floor(stepsPerSecond / 60));
+                const spf = Math.max(1, Math.floor(stepsPerSecond / 60));  // Steps per frame
                 for (let i = 0; i < spf; i++) simulationStep();
                 render();
                 if (step % 5 === 0) renderChart();
@@ -369,10 +441,13 @@
             requestAnimationFrame(animate);
         }
 
+        // ===== EVENT LISTENERS =====
+        // Handle user controls
         document.getElementById('speed').addEventListener('input', e => {
             stepsPerSecond = parseInt(e.target.value);
             document.getElementById('speedVal').textContent = stepsPerSecond;
         });
+        // Changing grid size requires full reinitialization
         document.getElementById('size').addEventListener('input', e => {
             GRID_SIZE = parseInt(e.target.value);
             document.getElementById('sizeVal').textContent = GRID_SIZE;
@@ -401,6 +476,7 @@
             e.target.textContent = paused ? 'Start' : 'Pause';
         });
 
+        // ===== INITIALIZATION =====
         initGrid();
         render();
         updateStats();
