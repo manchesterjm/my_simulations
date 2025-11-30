@@ -256,6 +256,24 @@
                 </div>
 
                 <div class="control-section">
+                    <h3>Star Properties</h3>
+                    <div class="control-row">
+                        <label>Radius:</label>
+                        <input type="range" id="starRadius" min="1" max="100" value="50">
+                        <span class="value-display" id="starRadiusValue">1.0x</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Density:</label>
+                        <input type="range" id="starDensity" min="1" max="100" value="50">
+                        <span class="value-display" id="starDensityValue">1.0x</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Mass:</label>
+                        <span class="value-display" id="starMassValue" style="color: #4CAF50;">1.00 M☉</span>
+                    </div>
+                </div>
+
+                <div class="control-section">
                     <h3>Parameters</h3>
                     <div class="control-row">
                         <label>Planets:</label>
@@ -355,6 +373,12 @@
         let showTrails = true;
         let timeScale = 10;
 
+        // Star settings (base values = Sun)
+        const BASE_STAR_MASS = 1.989e30;
+        const BASE_STAR_RADIUS = 6.96e8;
+        let starRadiusMultiplier = 1.0;
+        let starDensityMultiplier = 1.0;
+
         // Planet colors
         const COLORS = [
             '#4a9eff', '#ff6b6b', '#4ecdc4', '#ffe66d',
@@ -418,6 +442,20 @@
                 showTrails = e.target.checked;
             });
 
+            document.getElementById('starRadius').addEventListener('input', (e) => {
+                // Slider 1-100 maps to 0.1x - 10x (exponential scale)
+                starRadiusMultiplier = Math.pow(10, (parseInt(e.target.value) - 50) / 50);
+                document.getElementById('starRadiusValue').textContent = starRadiusMultiplier.toFixed(1) + 'x';
+                updateStarProperties();
+            });
+
+            document.getElementById('starDensity').addEventListener('input', (e) => {
+                // Slider 1-100 maps to 0.1x - 10x (exponential scale)
+                starDensityMultiplier = Math.pow(10, (parseInt(e.target.value) - 50) / 50);
+                document.getElementById('starDensityValue').textContent = starDensityMultiplier.toFixed(1) + 'x';
+                updateStarProperties();
+            });
+
             canvas.addEventListener('click', onCanvasClick);
 
             resetSimulation();
@@ -433,15 +471,19 @@
             eventLog = [];
             selectedPlanet = null;
 
-            // Create star (Sun-like)
+            // Create star (Sun-like, adjusted by multipliers)
+            const starRadius = BASE_STAR_RADIUS * starRadiusMultiplier;
+            // Mass = density * volume, volume scales with r^3
+            const starMass = BASE_STAR_MASS * starDensityMultiplier * Math.pow(starRadiusMultiplier, 3);
             star = new Body(
-                1.989e30,  // Solar mass
+                starMass,
                 0, 0,
                 0, 0,
-                6.96e8,    // Solar radius
+                starRadius,
                 '#ffd700',
                 'Star'
             );
+            updateStarMassDisplay();
 
             // Create planets
             planets = [];
@@ -452,6 +494,22 @@
             updatePlanetList();
             updateStats();
             document.getElementById('eventLog').innerHTML = '<div style="color: #666;">Events will appear here...</div>';
+        }
+
+        function updateStarProperties() {
+            if (!star) return;
+
+            // Update star radius and mass based on multipliers
+            star.radius = BASE_STAR_RADIUS * starRadiusMultiplier;
+            // Mass = density * volume, volume scales with r^3
+            star.mass = BASE_STAR_MASS * starDensityMultiplier * Math.pow(starRadiusMultiplier, 3);
+            updateStarMassDisplay();
+        }
+
+        function updateStarMassDisplay() {
+            // Display mass in solar masses
+            const solarMasses = star.mass / BASE_STAR_MASS;
+            document.getElementById('starMassValue').textContent = solarMasses.toFixed(2) + ' M☉';
         }
 
         function addRandomPlanet() {
