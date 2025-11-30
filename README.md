@@ -15,6 +15,7 @@ This project contains simulations exploring emergent behavior in complex systems
 | **Forest Fire** | Drossel-Schwabl model | Fire spread and self-organized criticality |
 | **Epidemic** | Agent-based SIR model | Disease spread, R0, herd immunity |
 | **Noodle Loops** | Monte Carlo simulation | Probability puzzle with exact solutions |
+| **Gravity** | N-body simulation | Orbital dynamics, collisions, ejections |
 | **Cache Sim** | CPU cache simulator | LRU/FIFO replacement policies |
 
 ### GPU Acceleration
@@ -63,6 +64,12 @@ python code_files/epidemic.py              # Basic SIR simulation
 python code_files/epidemic.py --compare    # Compare different infection rates
 python code_files/epidemic.py --vaccine    # Vaccination intervention demo
 
+# N-Body Gravity Simulation
+python code_files/gravity.py               # Quick demo (solar system)
+python code_files/gravity.py --animate     # Animated with random planets
+python code_files/gravity.py --collision   # Collision demo
+python code_files/gravity.py --ejection    # Ejection demo
+
 # Monte Carlo
 python code_files/noodle_loops.py          # Noodle loop probability simulation
 python code_files/noodle_loops.py --n 10 --trials 100000
@@ -74,7 +81,7 @@ python code_files/benchmark.py             # Compare performance
 ## Testing
 
 \`\`\`bash
-# Run all tests (78 total)
+# Run all tests (105 total)
 pytest tests/ -v
 
 # Run with hypothesis statistics
@@ -93,6 +100,7 @@ pytest tests/ --hypothesis-show-statistics
 │   ├── ising_model.py     # Ising model (CPU + GPU)
 │   ├── forest_fire.py     # Forest fire (CPU + GPU)
 │   ├── epidemic.py        # SIR epidemic model
+│   ├── gravity.py         # N-body gravity simulator
 │   ├── noodle_loops.py    # Monte Carlo simulation
 │   ├── cache_sim.py       # CPU cache simulator
 │   ├── run_all.py         # Combined demo
@@ -100,7 +108,7 @@ pytest tests/ --hypothesis-show-statistics
 │   ├── gpu_utils.py       # GPU detection utilities
 │   └── *_gpu.py           # GPU implementations
 ├── features/              # BDD specifications (Gherkin)
-├── tests/                 # Unit tests (78 tests)
+├── tests/                 # Unit tests (105 tests)
 ├── sessions/              # Development session logs
 └── support_files/         # Config and reference materials
 \`\`\`
