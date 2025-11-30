@@ -768,115 +768,146 @@ INTERACTIVITY:
             }
         }
 
-        // ===== ANIMATED ANT CLASS =====
-        class AnimatedAnt {
-            constructor(path, cost) {
-                this.path = path;
-                this.cost = cost;
-                this.currentSegment = 0;  // Which edge we're on
-                this.progress = 0;        // 0-1 progress along current edge
+        // ===== SIMULATED ANT CLASS =====
+        // These ARE the simulation - they make decisions and deposit pheromones
+        class SimulatedAnt {
+            constructor() {
+                this.currentNode = source;
+                this.targetNode = null;
+                this.path = [source];
+                this.visited = new Set([source]);
+                this.pathCost = 0;
+                this.progress = 0;  // 0-1 progress along current edge
                 this.finished = false;
-                this.x = 0;
-                this.y = 0;
-                this.updatePosition();
+                this.reachedDestination = false;
+                this.x = positions[source].x;
+                this.y = positions[source].y;
+                this.chooseNextNode();
             }
 
-            updatePosition() {
-                if (this.currentSegment >= this.path.length - 1) {
+            chooseNextNode() {
+                if (this.currentNode === destination) {
+                    this.reachedDestination = true;
                     this.finished = true;
+                    this.depositPheromones();
                     return;
                 }
 
-                const fromNode = this.path[this.currentSegment];
-                const toNode = this.path[this.currentSegment + 1];
-                const p1 = positions[fromNode];
-                const p2 = positions[toNode];
+                const neighbors = adjacency[this.currentNode].filter(n => !this.visited.has(n));
 
-                // Interpolate position
-                this.x = p1.x + (p2.x - p1.x) * this.progress;
-                this.y = p1.y + (p2.y - p1.y) * this.progress;
+                if (neighbors.length === 0) {
+                    this.finished = true;  // Stuck, no valid moves
+                    return;
+                }
+
+                // Calculate probabilities based on pheromone and distance
+                const attractiveness = {};
+                let total = 0;
+
+                for (const neighbor of neighbors) {
+                    const key = edgeKey(this.currentNode, neighbor);
+                    const pheromone = pheromones[key] || 0.1;
+                    const cost = getEdgeCost(this.currentNode, neighbor);
+                    const attr = Math.pow(pheromone, alpha) * Math.pow(1 / cost, beta);
+                    attractiveness[neighbor] = attr;
+                    total += attr;
+                }
+
+                // Roulette wheel selection
+                const r = Math.random();
+                let cumulative = 0;
+                this.targetNode = neighbors[0];
+
+                for (const neighbor of neighbors) {
+                    cumulative += attractiveness[neighbor] / total;
+                    if (r <= cumulative) {
+                        this.targetNode = neighbor;
+                        break;
+                    }
+                }
+
+                this.progress = 0;
             }
 
             move() {
-                if (this.finished) return;
+                if (this.finished || this.targetNode === null) return;
 
                 this.progress += antSpeed;
+
+                // Interpolate position
+                const p1 = positions[this.currentNode];
+                const p2 = positions[this.targetNode];
+                this.x = p1.x + (p2.x - p1.x) * this.progress;
+                this.y = p1.y + (p2.y - p1.y) * this.progress;
+
+                // Reached next node
                 if (this.progress >= 1) {
-                    this.progress = 0;
-                    this.currentSegment++;
-                    if (this.currentSegment >= this.path.length - 1) {
-                        this.finished = true;
-                    }
+                    const edgeCost = getEdgeCost(this.currentNode, this.targetNode);
+                    this.pathCost += edgeCost;
+                    this.currentNode = this.targetNode;
+                    this.path.push(this.currentNode);
+                    this.visited.add(this.currentNode);
+                    this.chooseNextNode();
                 }
-                this.updatePosition();
+            }
+
+            depositPheromones() {
+                if (!this.reachedDestination) return;
+
+                const deposit = Q / this.pathCost;
+                for (let i = 0; i < this.path.length - 1; i++) {
+                    const key = edgeKey(this.path[i], this.path[i + 1]);
+                    pheromones[key] = (pheromones[key] || 0) + deposit;
+                }
+
+                // Track statistics
+                if (this.pathCost < bestCost) {
+                    bestCost = this.pathCost;
+                    bestPath = [...this.path];
+                }
+
+                const pathKey = this.path.join('-');
+                pathCounts[pathKey] = (pathCounts[pathKey] || 0) + 1;
+                totalAnts++;
             }
         }
 
-        // ===== ACO ITERATION =====
-        function runIteration() {
-            const results = [];
+        // ===== UPDATE SIMULATION =====
+        let evaporationTimer = 0;
 
-            for (let i = 0; i < numAnts; i++) {
-                const ant = new Ant();
-                if (ant.traverse()) {
-                    results.push({ path: ant.path, cost: ant.pathCost });
-
-                    // Track path
-                    const pathKey = ant.path.join('-');
-                    pathCounts[pathKey] = (pathCounts[pathKey] || 0) + 1;
-
-                    // Create animated ant for visualization (show many ants exploring)
-                    if (showAnts && activeAnts.length < maxVisibleAnts) {
-                        activeAnts.push(new AnimatedAnt(ant.path, ant.pathCost));
-                    }
-                }
-            }
-
-            if (results.length > 0) {
-                // Find best in iteration
-                const costs = results.map(r => r.cost);
-                const minIdx = costs.indexOf(Math.min(...costs));
-                const iterBest = results[minIdx];
-
-                if (iterBest.cost < bestCost) {
-                    bestCost = iterBest.cost;
-                    bestPath = iterBest.path;
-                }
-
-                // Track history
-                costHistory.push(bestCost);
-                meanCostHistory.push(costs.reduce((a, b) => a + b) / costs.length);
-
-                // Deposit pheromones
-                for (const result of results) {
-                    const deposit = Q / result.cost;
-                    for (let i = 0; i < result.path.length - 1; i++) {
-                        const key = edgeKey(result.path[i], result.path[i + 1]);
-                        pheromones[key] = (pheromones[key] || 0) + deposit;
-                    }
-                }
-            }
-
-            // Evaporate
-            for (const key in pheromones) {
-                pheromones[key] *= (1 - rho);
-                pheromones[key] = Math.max(pheromones[key], 0.001);
-            }
-
-            iteration++;
-            totalAnts += numAnts;
-            updateStats();
-        }
-
-        // ===== UPDATE ANIMATED ANTS =====
-        function updateAnts() {
+        function updateSimulation() {
             // Move all active ants
             for (const ant of activeAnts) {
                 ant.move();
             }
 
             // Remove finished ants
+            const finishedCount = activeAnts.filter(ant => ant.finished).length;
             activeAnts = activeAnts.filter(ant => !ant.finished);
+
+            // Spawn new ants to replace finished ones
+            const antsToSpawn = Math.min(numAnts / 10, maxVisibleAnts - activeAnts.length);
+            for (let i = 0; i < antsToSpawn; i++) {
+                activeAnts.push(new SimulatedAnt());
+            }
+
+            // Evaporate pheromones periodically
+            evaporationTimer++;
+            if (evaporationTimer >= 60) {  // Every ~1 second at 60fps
+                for (const key in pheromones) {
+                    pheromones[key] *= (1 - rho);
+                    pheromones[key] = Math.max(pheromones[key], 0.001);
+                }
+                evaporationTimer = 0;
+                iteration++;
+
+                // Update cost history for chart
+                if (bestCost < Infinity) {
+                    costHistory.push(bestCost);
+                }
+            }
+
+            updateStats();
         }
 
         // ===== SIMULATION CONTROL =====
@@ -913,13 +944,18 @@ INTERACTIVITY:
             costHistory = [];
             meanCostHistory = [];
             pathCounts = {};
-            activeAnts = [];  // Clear animated ants
-            frameCount = 0;
+            activeAnts = [];  // Clear all ants
+            evaporationTimer = 0;
 
             // Reinitialize pheromones (low initial value so trails build up visibly)
             for (const edge of edges) {
                 const key = edgeKey(edge.u, edge.v);
                 pheromones[key] = 0.1;
+            }
+
+            // Spawn initial ants
+            for (let i = 0; i < Math.min(numAnts / 5, maxVisibleAnts); i++) {
+                activeAnts.push(new SimulatedAnt());
             }
 
             updateStats();
@@ -1174,33 +1210,13 @@ INTERACTIVITY:
         }
 
         // ===== ANIMATION LOOP =====
-        let frameCount = 0;
-
         function animate() {
             if (!running) return;
 
-            frameCount++;
-
-            // Run ACO iteration every few frames (based on speed)
-            // This handles pheromone updates and statistics
-            if (frameCount % Math.max(1, Math.floor(30 / speed)) === 0) {
-                runIteration();
+            // Run simulation steps based on speed
+            for (let i = 0; i < speed; i++) {
+                updateSimulation();
             }
-
-            // Continuously spawn exploring ants (independent of iteration)
-            // This creates the visual effect of constant exploration
-            if (frameCount % 2 === 0 && activeAnts.length < maxVisibleAnts) {
-                // Spawn ants that explore based on current pheromones
-                for (let i = 0; i < Math.min(8, maxVisibleAnts - activeAnts.length); i++) {
-                    const ant = new Ant();
-                    if (ant.traverse()) {
-                        activeAnts.push(new AnimatedAnt(ant.path, ant.pathCost));
-                    }
-                }
-            }
-
-            // Update animated ants every frame for smooth movement
-            updateAnts();
 
             draw();
             animationId = requestAnimationFrame(animate);
