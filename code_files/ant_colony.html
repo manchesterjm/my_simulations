@@ -412,7 +412,7 @@ INTERACTIVITY:
 
         // ===== ANIMATED ANTS =====
         let activeAnts = [];  // Ants currently moving on the graph
-        let antSpeed = 0.015;  // How fast ants move (0-1 progress per frame)
+        let antSpeed = 0.08;  // How fast ants move (0-1 progress per frame)
         let showAnts = true;  // Whether to show animated ants
         let maxVisibleAnts = 500;  // Maximum ants to display at once
 
@@ -1183,15 +1183,15 @@ INTERACTIVITY:
 
             // Run ACO iteration every few frames (based on speed)
             // This handles pheromone updates and statistics
-            if (frameCount % Math.max(1, Math.floor(15 / speed)) === 0) {
+            if (frameCount % Math.max(1, Math.floor(30 / speed)) === 0) {
                 runIteration();
             }
 
             // Continuously spawn exploring ants (independent of iteration)
             // This creates the visual effect of constant exploration
-            if (frameCount % 3 === 0 && activeAnts.length < maxVisibleAnts) {
-                // Spawn a few ants that explore based on current pheromones
-                for (let i = 0; i < Math.min(5, maxVisibleAnts - activeAnts.length); i++) {
+            if (frameCount % 2 === 0 && activeAnts.length < maxVisibleAnts) {
+                // Spawn ants that explore based on current pheromones
+                for (let i = 0; i < Math.min(8, maxVisibleAnts - activeAnts.length); i++) {
                     const ant = new Ant();
                     if (ant.traverse()) {
                         activeAnts.push(new AnimatedAnt(ant.path, ant.pathCost));
