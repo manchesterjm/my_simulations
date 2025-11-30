@@ -319,12 +319,20 @@
                     </div>
                     <div class="control-row">
                         <label>Time Scale:</label>
-                        <input type="range" id="timeScale" min="1" max="50" value="10">
+                        <div class="slider-with-nudge">
+                            <button class="btn-nudge" id="timeScaleDown">−</button>
+                            <input type="range" id="timeScale" min="1" max="50" value="10">
+                            <button class="btn-nudge" id="timeScaleUp">+</button>
+                        </div>
                         <span class="value-display" id="timeScaleValue">10x</span>
                     </div>
                     <div class="control-row">
                         <label>Trail Length:</label>
-                        <input type="range" id="trailLength" min="0" max="500" value="200">
+                        <div class="slider-with-nudge">
+                            <button class="btn-nudge" id="trailLengthDown">−</button>
+                            <input type="range" id="trailLength" min="0" max="500" value="200">
+                            <button class="btn-nudge" id="trailLengthUp">+</button>
+                        </div>
                         <span class="value-display" id="trailLengthValue">200</span>
                     </div>
                     <div class="control-row">
@@ -494,11 +502,17 @@
                 updateStarProperties();
             });
 
-            // Nudge buttons for star radius
+            // Nudge buttons for star properties
             document.getElementById('starRadiusDown').addEventListener('click', () => nudgeSlider('starRadius', -1));
             document.getElementById('starRadiusUp').addEventListener('click', () => nudgeSlider('starRadius', 1));
             document.getElementById('starDensityDown').addEventListener('click', () => nudgeSlider('starDensity', -1));
             document.getElementById('starDensityUp').addEventListener('click', () => nudgeSlider('starDensity', 1));
+
+            // Nudge buttons for time scale and trail length
+            document.getElementById('timeScaleDown').addEventListener('click', () => nudgeSlider('timeScale', -1));
+            document.getElementById('timeScaleUp').addEventListener('click', () => nudgeSlider('timeScale', 1));
+            document.getElementById('trailLengthDown').addEventListener('click', () => nudgeSlider('trailLength', -10));
+            document.getElementById('trailLengthUp').addEventListener('click', () => nudgeSlider('trailLength', 10));
 
             canvas.addEventListener('click', onCanvasClick);
 
@@ -558,7 +572,9 @@
 
         function nudgeSlider(sliderId, delta) {
             const slider = document.getElementById(sliderId);
-            const newValue = Math.max(1, Math.min(100, parseInt(slider.value) + delta));
+            const min = parseInt(slider.min);
+            const max = parseInt(slider.max);
+            const newValue = Math.max(min, Math.min(max, parseInt(slider.value) + delta));
             slider.value = newValue;
             // Trigger the input event to update the display and properties
             slider.dispatchEvent(new Event('input'));
