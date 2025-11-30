@@ -222,7 +222,7 @@ def run_interactive_simulation():
     im, line = _setup_animation_axes(ax1, ax2, sim)
     update = _create_update_function(sim, im, ax1, ax2, line)
 
-    FuncAnimation(fig, update, frames=500, interval=50, blit=False)
+    anim = FuncAnimation(fig, update, frames=500, interval=50, blit=False)
     plt.tight_layout()
     plt.show()
 

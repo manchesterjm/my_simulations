@@ -275,7 +275,7 @@ def run_critical_animation():
     im, line = _setup_ising_animation(model, ax1, ax2)
     update = _create_ising_update(model, im, ax1, ax2, line)
 
-    FuncAnimation(fig, update, frames=200, interval=100, blit=False)
+    anim = FuncAnimation(fig, update, frames=200, interval=100, blit=False)
     plt.tight_layout()
     plt.show()
 

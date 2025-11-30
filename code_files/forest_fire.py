@@ -234,10 +234,49 @@ def _setup_forest_animation(sim, ax1, ax2):
 
 
 def _create_forest_update(sim, im, ax1, ax2, line):
-    """Create animation update function for forest fire."""
+    """Create animation update function for forest fire with step-by-step fire spread."""
+    # Track active fire state
+    state = {'burning_count': 0, 'fire_size': 0}
+
     def update(frame):
-        for _ in range(10):
-            sim.step()
+        # Check if there's an active fire that can still spread
+        burning_cells = np.argwhere(sim.grid == BURNING)
+
+        if len(burning_cells) > 0:
+            # Fire is active - spread one layer
+            new_burning = []
+            for i, j in burning_cells:
+                for ni, nj in sim._get_moore_neighbors(i, j):
+                    if sim.grid[ni, nj] == TREE:
+                        new_burning.append((ni, nj))
+
+            # Convert current burning to empty
+            sim.grid[sim.grid == BURNING] = EMPTY
+
+            # Mark new cells as burning
+            for ni, nj in new_burning:
+                sim.grid[ni, nj] = BURNING
+                state['fire_size'] += 1
+
+            # If fire is done (no new burning), record the fire size
+            if len(new_burning) == 0 and state['fire_size'] > 0:
+                sim.fire_sizes.append(state['fire_size'])
+                state['fire_size'] = 0
+        else:
+            # No active fire - do normal step (grow trees, maybe start fire)
+            sim.timestep += 1
+            sim._grow_trees()
+
+            # Try lightning - but only ignite one cell, don't spread
+            tree_positions = np.argwhere(sim.grid == TREE)
+            if len(tree_positions) > 0:
+                for i, j in tree_positions:
+                    if sim.rng.random() < sim.f:
+                        sim.grid[i, j] = BURNING
+                        state['fire_size'] = 1
+                        break
+
+            sim.tree_counts.append(sim.count_trees())
 
         im.set_array(sim.grid)
         density = sim.tree_density()
@@ -264,7 +303,7 @@ def run_interactive_simulation():
     im, line = _setup_forest_animation(sim, ax1, ax2)
     update = _create_forest_update(sim, im, ax1, ax2, line)
 
-    FuncAnimation(fig, update, frames=500, interval=50, blit=False)
+    anim = FuncAnimation(fig, update, frames=500, interval=1000, blit=False)
     plt.tight_layout()
     plt.show()
 
