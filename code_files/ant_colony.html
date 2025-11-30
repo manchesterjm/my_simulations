@@ -264,15 +264,19 @@ INTERACTIVITY:
                     <div class="legend">
                         <div class="legend-item">
                             <div class="legend-dot" style="background: #4CAF50;"></div>
-                            <span>Source</span>
+                            <span>Source (Food)</span>
                         </div>
                         <div class="legend-item">
                             <div class="legend-dot" style="background: #f44336;"></div>
-                            <span>Destination</span>
+                            <span>Destination (Nest)</span>
                         </div>
                         <div class="legend-item">
-                            <div class="legend-dot" style="background: #ff6b35;"></div>
-                            <span>Best Path</span>
+                            <div class="legend-dot" style="background: #ff3232; width: 20px; height: 4px; border-radius: 2px;"></div>
+                            <span>Pheromone Trail</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-dot" style="background: #000;"></div>
+                            <span>Ant</span>
                         </div>
                     </div>
                 </div>
@@ -576,10 +580,10 @@ INTERACTIVITY:
                 }
             }
 
-            // Initialize pheromones
+            // Initialize pheromones (low initial value so trails build up visibly)
             for (const edge of edges) {
                 const key = edgeKey(edge.u, edge.v);
-                pheromones[key] = 1.0;
+                pheromones[key] = 0.1;
             }
 
             // Update numNodes to actual grid size
@@ -912,10 +916,10 @@ INTERACTIVITY:
             activeAnts = [];  // Clear animated ants
             frameCount = 0;
 
-            // Reinitialize pheromones
+            // Reinitialize pheromones (low initial value so trails build up visibly)
             for (const edge of edges) {
                 const key = edgeKey(edge.u, edge.v);
-                pheromones[key] = 1.0;
+                pheromones[key] = 0.1;
             }
 
             updateStats();
@@ -1017,20 +1021,9 @@ INTERACTIVITY:
                 ctx.setLineDash([]);
             }
 
-            // Draw best path
-            if (bestPath && bestPath.length > 1) {
-                ctx.beginPath();
-                for (let i = 0; i < bestPath.length; i++) {
-                    const p = positions[bestPath[i]];
-                    const x = padding + p.x * (width - 2 * padding);
-                    const y = padding + p.y * (height - 2 * padding);
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
-                ctx.strokeStyle = '#ff6b35';
-                ctx.lineWidth = 4;
-                ctx.stroke();
-            }
+            // Best path is now shown through pheromone trails (red lines)
+            // The thicker red lines ARE the best path discovered by ants
+            // No need for separate overlay - let the algorithm reveal it naturally
 
             // Draw nodes
             for (let i = 0; i < numNodes; i++) {
