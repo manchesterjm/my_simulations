@@ -823,8 +823,29 @@
                             toRemove.add(j);
                             collisions++;
                             logEvent(`${p2.name} absorbed by ${p1.name}!`, 'collision');
+                        } else if (p1IsSmall && p2IsSmall) {
+                            // Both are small bodies - merge them (larger absorbs smaller)
+                            if (m1 >= m2) {
+                                // p1 absorbs p2
+                                p1.vx = (p1.mass * p1.vx + p2.mass * p2.vx) / (p1.mass + p2.mass);
+                                p1.vy = (p1.mass * p1.vy + p2.mass * p2.vy) / (p1.mass + p2.mass);
+                                p1.mass += p2.mass;
+                                p1.radius = Math.pow(p1.radius * p1.radius * p1.radius + p2.radius * p2.radius * p2.radius, 1/3);
+                                toRemove.add(j);
+                                collisions++;
+                                logEvent(`${p2.name} merged into ${p1.name}!`, 'collision');
+                            } else {
+                                // p2 absorbs p1
+                                p2.vx = (p2.mass * p2.vx + p1.mass * p1.vx) / (p2.mass + p1.mass);
+                                p2.vy = (p2.mass * p2.vy + p1.mass * p1.vy) / (p2.mass + p1.mass);
+                                p2.mass += p1.mass;
+                                p2.radius = Math.pow(p2.radius * p2.radius * p2.radius + p1.radius * p1.radius * p1.radius, 1/3);
+                                toRemove.add(i);
+                                collisions++;
+                                logEvent(`${p1.name} merged into ${p2.name}!`, 'collision');
+                            }
                         } else {
-                            // Both are planets or both are small - elastic collision
+                            // Both are planets - elastic collision
                             // Normal vector from p1 to p2
                             const nx = (p2.x - p1.x) / dist;
                             const ny = (p2.y - p1.y) / dist;
