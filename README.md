@@ -1,12 +1,12 @@
-# Physics & Probability Simulations
+# Physics, Probability & AI Simulations
 
-Physics simulations demonstrating **self-organized criticality**, **power law distributions**, and **Monte Carlo methods**.
+Simulations demonstrating **self-organized criticality**, **power law distributions**, **Monte Carlo methods**, and **reinforcement learning**.
 
 ## Overview
 
-This project contains simulations exploring emergent behavior in complex systems - from avalanches to epidemics to probability puzzles.
+This project contains simulations exploring emergent behavior in complex systems - from avalanches to epidemics to AI agents learning to play games.
 
-### Simulations
+### Physics & Probability Simulations
 
 | Simulation | Model | Key Phenomenon |
 |------------|-------|----------------|
@@ -18,9 +18,17 @@ This project contains simulations exploring emergent behavior in complex systems
 | **Gravity** | N-body simulation | Orbital dynamics, collisions, ejections |
 | **Cache Sim** | CPU cache simulator | LRU/FIFO replacement policies |
 
+### AI/ML Simulations
+
+| Project | Model | Key Achievement |
+|---------|-------|-----------------|
+| **Minesweeper ML** | Hybrid (AC-3 + Neural Network) | 88% win rate on beginner |
+
+See [AI_ML/minesweeper_ml_project/](AI_ML/minesweeper_ml_project/) for details.
+
 ### GPU Acceleration
 
-The first three simulations support **GPU acceleration** via CuPy:
+The physics simulations support **GPU acceleration** via CuPy:
 - Ising Model: ~40x speedup with checkerboard Metropolis
 - Sandpile: ~40x speedup with batch avalanche processing
 - Forest Fire: ~1.3x speedup (limited by sequential BFS)
@@ -95,7 +103,7 @@ pytest tests/ --hypothesis-show-statistics
 ├── README.md
 ├── LICENSE
 ├── CLAUDE.md              # Development guidelines
-├── code_files/            # Simulation source code
+├── code_files/            # Physics simulation source code
 │   ├── sandpile.py        # Abelian sandpile (CPU + GPU)
 │   ├── ising_model.py     # Ising model (CPU + GPU)
 │   ├── forest_fire.py     # Forest fire (CPU + GPU)
@@ -107,6 +115,8 @@ pytest tests/ --hypothesis-show-statistics
 │   ├── benchmark.py       # CPU vs GPU benchmarks
 │   ├── gpu_utils.py       # GPU detection utilities
 │   └── *_gpu.py           # GPU implementations
+├── AI_ML/                 # AI/ML projects
+│   └── minesweeper_ml_project/  # Minesweeper AI (PyTorch)
 ├── features/              # BDD specifications (Gherkin)
 ├── tests/                 # Unit tests (105 tests)
 ├── sessions/              # Development session logs
