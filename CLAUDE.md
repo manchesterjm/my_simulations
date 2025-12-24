@@ -6,6 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Physics simulations demonstrating **self-organized criticality**, **power law distributions**, and **Monte Carlo methods**. Inspired by the Veritasium video on power laws. All simulations show that different physical systems exhibit universal behavior at criticality.
 
+## Repository
+
+**GitHub:** https://github.com/manchesterjm/my_simulations
+
+**Note:** The `AI_ML/` subfolder contains projects with their own separate repositories:
+- **Minesweeper ML** (`AI_ML/minesweeper_ml_project/`) → https://github.com/manchesterjm/minesweeper_ml_project
+
 ## File Structure
 
 ```
