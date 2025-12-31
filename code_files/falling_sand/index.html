@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Falling Sand (CPU - TDD Tested)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { margin-bottom: 10px; color: #e6b347; }
+        .subtitle { color: #888; margin-bottom: 20px; text-align: center; }
+        canvas {
+            border: 2px solid #333;
+            cursor: crosshair;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .controls { margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        button {
+            background: #e6b347;
+            color: #1a1a2e;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #f0c65a; }
+        button.selected { box-shadow: 0 0 0 3px #fff; }
+        .mat-sand { background: linear-gradient(135deg, #e6b347, #c9953a) !important; }
+        .mat-erase { background: #333 !important; color: #fff !important; }
+        .stats { margin-top: 10px; font-size: 14px; color: #888; }
+        label { font-size: 13px; }
+        input[type="range"] { width: 80px; vertical-align: middle; }
+        .cpu-badge { background: #2196F3; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; }
+        .tdd-badge { background: #4CAF50; color: white; padding: 2px 8px; border-radius: 3px; font-size: 11px; margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Falling Sand <span class="cpu-badge">CPU</span><span class="tdd-badge">TDD</span></h1>
+    <p class="subtitle">Click and drag to draw • Uses TDD-tested sand physics</p>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="stats">
+        Grid: <span id="gridInfo">128×128</span> |
+        FPS: <span id="fps">0</span> |
+        Sand: <span id="sandCount">0</span>
+    </div>
+
+    <div class="controls">
+        <button class="mat-sand selected" data-mat="1">Sand</button>
+        <button class="mat-erase" data-mat="0">Erase</button>
+    </div>
+
+    <div class="controls">
+        <label>Brush: <span id="brushVal">5</span></label>
+        <input type="range" id="brush" min="1" max="20" value="5">
+        <label>Grid:</label>
+        <select id="gridSize">
+            <option value="64">64</option>
+            <option value="128" selected>128</option>
+            <option value="256">256</option>
+            <option value="512">512</option>
+        </select>
+        <button id="pause">Pause</button>
+        <button id="clear">Clear</button>
+        <button id="step">Step</button>
+    </div>
+
+    <!-- Include the TDD-tested sand core module -->
+    <script src="src/sand_core.js"></script>
+
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const CANVAS_SIZE = 600;
+        canvas.width = CANVAS_SIZE;
+        canvas.height = CANVAS_SIZE;
+
+        // Simulation state
+        let GRID_SIZE = 128;
+        let cellSize = CANVAS_SIZE / GRID_SIZE;
+        let sim = new SandSimulation(GRID_SIZE, GRID_SIZE);
+        let material = SAND;
+        let brushSize = 5;
+        let paused = false;
+        let isDrawing = false;
+
+        // FPS tracking
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let fps = 0;
+
+        // Sand colors (slight variation for visual interest)
+        const sandColors = [
+            '#e6b347', '#d9a940', '#cca039', '#bf9732', '#e0af44',
+            '#d4a33d', '#c89836', '#bb8d2f', '#dca742', '#cf9c3b'
+        ];
+
+        // Get canvas coordinates from mouse event
+        function getGridCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.clientX - rect.left) / cellSize);
+            const y = GRID_SIZE - 1 - Math.floor((e.clientY - rect.top) / cellSize); // Flip Y
+            return { x, y };
+        }
+
+        // Draw sand with brush
+        function drawSand(e) {
+            const { x, y } = getGridCoords(e);
+            for (let dy = -brushSize; dy <= brushSize; dy++) {
+                for (let dx = -brushSize; dx <= brushSize; dx++) {
+                    // Circular brush
+                    if (dx * dx + dy * dy <= brushSize * brushSize) {
+                        const px = x + dx;
+                        const py = y + dy;
+                        if (px >= 0 && px < GRID_SIZE && py >= 0 && py < GRID_SIZE) {
+                            if (material === SAND) {
+                                sim.placeSand(px, py);
+                            } else {
+                                sim.removeSand(px, py);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Render the grid
+        function render() {
+            // Clear canvas
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+            // Draw each sand particle
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (sim.grid.isSand(x, y)) {
+                        // Use consistent color based on position (for visual variety)
+                        const colorIndex = (x * 7 + y * 13) % sandColors.length;
+                        ctx.fillStyle = sandColors[colorIndex];
+                        // Flip Y for canvas (0,0 at top-left vs our bottom-left)
+                        const canvasY = (GRID_SIZE - 1 - y) * cellSize;
+                        ctx.fillRect(x * cellSize, canvasY, cellSize, cellSize);
+                    }
+                }
+            }
+        }
+
+        // Main animation loop
+        function animate() {
+            // Update FPS
+            frameCount++;
+            const now = performance.now();
+            if (now - lastTime >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastTime = now;
+                document.getElementById('fps').textContent = fps;
+                document.getElementById('sandCount').textContent = sim.grid.countSand();
+            }
+
+            // Step simulation
+            if (!paused) {
+                sim.step();
+            }
+
+            // Render
+            render();
+
+            requestAnimationFrame(animate);
+        }
+
+        // Event handlers
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            drawSand(e);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) {
+                drawSand(e);
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+        });
+
+        // Touch support
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDrawing = true;
+            const touch = e.touches[0];
+            drawSand({ clientX: touch.clientX, clientY: touch.clientY });
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (isDrawing) {
+                const touch = e.touches[0];
+                drawSand({ clientX: touch.clientX, clientY: touch.clientY });
+            }
+        });
+
+        canvas.addEventListener('touchend', () => {
+            isDrawing = false;
+        });
+
+        // Material buttons
+        document.querySelectorAll('[data-mat]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('[data-mat]').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                material = parseInt(btn.dataset.mat);
+            });
+        });
+
+        // Brush size
+        document.getElementById('brush').addEventListener('input', (e) => {
+            brushSize = parseInt(e.target.value);
+            document.getElementById('brushVal').textContent = brushSize;
+        });
+
+        // Grid size
+        document.getElementById('gridSize').addEventListener('change', (e) => {
+            GRID_SIZE = parseInt(e.target.value);
+            cellSize = CANVAS_SIZE / GRID_SIZE;
+            sim = new SandSimulation(GRID_SIZE, GRID_SIZE);
+            document.getElementById('gridInfo').textContent = `${GRID_SIZE}×${GRID_SIZE}`;
+        });
+
+        // Pause button
+        document.getElementById('pause').addEventListener('click', () => {
+            paused = !paused;
+            document.getElementById('pause').textContent = paused ? 'Play' : 'Pause';
+        });
+
+        // Clear button
+        document.getElementById('clear').addEventListener('click', () => {
+            sim.grid.clear();
+        });
+
+        // Step button (for debugging)
+        document.getElementById('step').addEventListener('click', () => {
+            sim.step();
+            document.getElementById('sandCount').textContent = sim.grid.countSand();
+        });
+
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>

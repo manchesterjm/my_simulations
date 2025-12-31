@@ -18,13 +18,13 @@ This project contains simulations exploring emergent behavior in complex systems
 | **Gravity** | N-body simulation | Orbital dynamics, collisions, ejections |
 | **Cache Sim** | CPU cache simulator | LRU/FIFO replacement policies |
 
-### Browser-Based GPU Simulations (WebGL)
+### Browser-Based Simulations
 
-Interactive HTML simulations that run entirely in the browser using WebGL for GPU acceleration:
+Interactive HTML simulations that run entirely in the browser:
 
 | Simulation | Algorithm | Key Features |
 |------------|-----------|--------------|
-| **Falling Sand** | Cellular Automaton | True GPU-parallel, 4-phase race prevention |
+| **Falling Sand** | Cellular Automaton | TDD-tested, double-buffering, CPU Canvas2D |
 | **Sandpile** | Abelian Sandpile | Avalanche cascades, power laws |
 | **Ising Model** | Metropolis-Hastings | Phase transitions, GPU parallelism |
 | **Forest Fire** | Drossel-Schwabl | Fire spread, SOC behavior |
@@ -33,7 +33,7 @@ Interactive HTML simulations that run entirely in the browser using WebGL for GP
 | **Ant Colony** | Pheromone optimization | Path finding, emergent behavior |
 | **Noodle Loops** | Monte Carlo | Probability visualization |
 
-Open any `code_files/*_gpu.html` or `code_files/*.html` file in a browser.
+Open any `code_files/*.html` or `code_files/falling_sand/index.html` in a browser.
 
 ### AI/ML Simulations
 
@@ -131,7 +131,12 @@ pytest tests/ --hypothesis-show-statistics
 │   ├── run_all.py         # Combined demo
 │   ├── benchmark.py       # CPU vs GPU benchmarks
 │   ├── gpu_utils.py       # GPU detection utilities
-│   └── *_gpu.py           # GPU implementations
+│   ├── *_gpu.py           # GPU implementations
+│   └── falling_sand/      # TDD-tested falling sand simulation
+│       ├── features/      # BDD Gherkin specifications
+│       ├── src/           # Core simulation logic
+│       ├── tests/         # Unit tests (27 tests)
+│       └── index.html     # Browser UI
 ├── AI_ML/                 # AI/ML projects
 │   └── minesweeper_ml_project/  # Minesweeper AI (PyTorch)
 ├── features/              # BDD specifications (Gherkin)
