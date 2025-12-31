@@ -1,3 +1,5 @@
+> **MASTER FILE:** See `C:\Users\manch\Desktop\CLAUDE.md` for global rules and reference index.
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
