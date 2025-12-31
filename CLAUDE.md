@@ -35,7 +35,12 @@ Physics simulations demonstrating **self-organized criticality**, **power law di
 │   ├── cache_sim.py       # CPU cache simulator
 │   ├── run_all.py         # Combined SOC demo
 │   ├── benchmark.py       # CPU vs GPU performance comparison
-│   └── gpu_utils.py       # GPU detection utilities
+│   ├── gpu_utils.py       # GPU detection utilities
+│   └── falling_sand/      # TDD-tested falling sand (JavaScript)
+│       ├── features/      # BDD Gherkin specifications
+│       ├── src/           # Core simulation logic
+│       ├── tests/         # Unit tests (27 tests)
+│       └── index.html     # Browser UI
 ├── features/              # BDD specifications (Gherkin)
 │   ├── sandpile.feature
 │   ├── ising_model.feature
@@ -100,6 +105,10 @@ python code_files/ant_colony.py --animate # Animated visualization
 python code_files/ant_colony.py --compare # Compare parameter settings
 # Or open ant_colony.html in browser for interactive web version
 
+# Falling Sand (JavaScript - browser only)
+# Open code_files/falling_sand/index.html in browser
+# Run tests: node code_files/falling_sand/tests/sand_core.test.js
+
 # Monte Carlo
 python code_files/noodle_loops.py --n 7 --trials 100000
 
@@ -128,6 +137,7 @@ Each simulation follows the same pattern:
 | Epidemic | `infection_prob=0.01`, `infectious_days=2`, `visits_per_day=3` |
 | Gravity | `star_mass`, `n_planets`, `dt=3600` (timestep) |
 | Ant Colony | `alpha=2`, `beta=2`, `rho=0.1`, `n_ants=500` |
+| Falling Sand | Grid size, brush size, alternating L/R priority |
 
 All simulations accept a `seed` parameter for reproducibility.
 
