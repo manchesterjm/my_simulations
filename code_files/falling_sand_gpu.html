@@ -31,8 +31,6 @@
         button:hover { background: #f0c65a; }
         button.selected { box-shadow: 0 0 0 3px #fff; }
         .mat-sand { background: linear-gradient(135deg, #e6b347, #c9953a) !important; }
-        .mat-water { background: linear-gradient(135deg, #4a90d9, #3a7bc8) !important; color: #fff !important; }
-        .mat-stone { background: linear-gradient(135deg, #666, #555) !important; color: #fff !important; }
         .mat-erase { background: #333 !important; color: #fff !important; }
         .stats { margin-top: 10px; font-size: 14px; color: #888; }
         label { font-size: 13px; }
@@ -53,8 +51,6 @@
 
     <div class="controls">
         <button class="mat-sand selected" data-mat="1">Sand</button>
-        <button class="mat-water" data-mat="2">Water</button>
-        <button class="mat-stone" data-mat="3">Stone</button>
         <button class="mat-erase" data-mat="0">Erase</button>
     </div>
 
@@ -95,8 +91,11 @@
             }
         `;
 
-        // Simulation shader - simple rules from the video
-        // Materials: 0=empty, 1=sand, 2=water, 3=stone (static)
+        // Simulation shader - Three simple rules from the video:
+        // 1. If below is empty, move there
+        // 2. If below blocked but below-right empty, move there
+        // 3. If below and below-right blocked but below-left empty, move there
+        // Alternate left/right priority each frame for symmetry
         const simSrc = `#version 300 es
             precision highp float;
             uniform sampler2D u_tex;
@@ -105,115 +104,118 @@
             in vec2 v_uv;
             out vec4 fragColor;
 
+            // Get material at offset (0=empty, 1=sand)
+            // Returns 1 (blocked) for out of bounds
             int get(int dx, int dy) {
                 ivec2 p = ivec2(gl_FragCoord.xy) + ivec2(dx, dy);
-                if (p.x < 0 || p.x >= int(u_res.x) || p.y < 0 || p.y >= int(u_res.y)) return 3;
-                return int(texelFetch(u_tex, p, 0).r * 255.0 + 0.5);
-            }
-
-            bool canDisplace(int target) {
-                return target == 0;  // Can only move into empty
+                if (p.x < 0 || p.x >= int(u_res.x) || p.y < 0 || p.y >= int(u_res.y)) return 1;
+                vec4 c = texelFetch(u_tex, p, 0);
+                return c.r > 0.5 ? 1 : 0;
             }
 
             void main() {
                 int me = get(0, 0);
+
+                // Empty cells don't do anything in the "push" phase
+                if (me == 0) {
+                    // Check if sand should fall into this cell
+                    int above = get(0, 1);
+                    if (above == 1) {
+                        // Sand above wants to fall straight down
+                        fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+                        return;
+                    }
+
+                    // Check diagonal - alternate priority each frame
+                    bool leftFirst = (u_frame & 1) == 0;
+                    int d1 = leftFirst ? -1 : 1;
+                    int d2 = leftFirst ? 1 : -1;
+
+                    int aboveD1 = get(d1, 1);
+                    int aboveD1Below = get(d1, 0);
+                    if (aboveD1 == 1 && aboveD1Below != 0) {
+                        // Sand diagonal wants to fall here (its below is blocked)
+                        fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+                        return;
+                    }
+
+                    int aboveD2 = get(d2, 1);
+                    int aboveD2Below = get(d2, 0);
+                    int belowD1 = get(d1, -1);
+                    if (aboveD2 == 1 && aboveD2Below != 0 && belowD1 != 0) {
+                        // Sand from other diagonal (its below and first diagonal blocked)
+                        fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+                        return;
+                    }
+
+                    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    return;
+                }
+
+                // Sand cell - check if it should move
                 int below = get(0, -1);
-                int above = get(0, 1);
-                int left = get(-1, 0);
-                int right = get(1, 0);
-                int belowLeft = get(-1, -1);
-                int belowRight = get(1, -1);
-                int aboveLeft = get(-1, 1);
-                int aboveRight = get(1, 1);
 
-                // Use position + frame for deterministic left/right choice
-                int x = int(gl_FragCoord.x);
-                bool goLeftFirst = ((x + u_frame) & 1) == 0;
-
-                int result = me;
-
-                // === STONE is static - never moves ===
-                if (me == 3) {
-                    result = 3;
-                }
-                // === SAND falls down, then diagonally ===
-                else if (me == 1) {
-                    if (below == 0) {
-                        result = 0;  // Fall straight down
-                    } else if (below == 2) {
-                        result = 2;  // Swap with water below
-                    } else if (goLeftFirst) {
-                        if (belowLeft == 0) result = 0;
-                        else if (belowRight == 0) result = 0;
-                    } else {
-                        if (belowRight == 0) result = 0;
-                        else if (belowLeft == 0) result = 0;
-                    }
-                }
-                // === WATER falls, spreads diagonally and horizontally ===
-                else if (me == 2) {
-                    if (below == 0) {
-                        result = 0;  // Fall straight down
-                    } else if (goLeftFirst) {
-                        if (belowLeft == 0) result = 0;
-                        else if (belowRight == 0) result = 0;
-                        else if (left == 0 && below != 0) result = 0;  // Spread left
-                        else if (right == 0 && below != 0) result = 0; // Spread right
-                    } else {
-                        if (belowRight == 0) result = 0;
-                        else if (belowLeft == 0) result = 0;
-                        else if (right == 0 && below != 0) result = 0; // Spread right
-                        else if (left == 0 && below != 0) result = 0;  // Spread left
-                    }
-                }
-                // === EMPTY receives particles from above/diagonal/sides ===
-                else if (me == 0) {
-                    // Receive sand/water from directly above
-                    if (above == 1 || above == 2) {
-                        result = above;
-                    }
-                    // Receive sand diagonally (only if its straight-down is blocked)
-                    else if (aboveLeft == 1 && get(-1, 0) != 0) {
-                        result = 1;
-                    }
-                    else if (aboveRight == 1 && get(1, 0) != 0) {
-                        result = 1;
-                    }
-                    // Receive water diagonally
-                    else if (aboveLeft == 2 && get(-1, 0) != 0) {
-                        result = 2;
-                    }
-                    else if (aboveRight == 2 && get(1, 0) != 0) {
-                        result = 2;
-                    }
-                    // Receive water horizontally (water spreads sideways when below is blocked)
-                    else if (left == 2 && get(-1, -1) != 0) {
-                        result = 2;
-                    }
-                    else if (right == 2 && get(1, -1) != 0) {
-                        result = 2;
-                    }
+                // Rule 1: If below is empty, fall
+                if (below == 0) {
+                    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    return;
                 }
 
-                fragColor = vec4(float(result) / 255.0, 0.0, 0.0, 1.0);
+                // Alternate left/right priority each frame for symmetry
+                bool leftFirst = (u_frame & 1) == 0;
+                int d1 = leftFirst ? -1 : 1;
+                int d2 = leftFirst ? 1 : -1;
+
+                int belowD1 = get(d1, -1);
+                int belowD2 = get(d2, -1);
+
+                // Rule 2: If below blocked but diagonal-1 empty, move there
+                if (belowD1 == 0) {
+                    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    return;
+                }
+
+                // Rule 3: If below and diagonal-1 blocked but diagonal-2 empty, move there
+                if (belowD2 == 0) {
+                    fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+                    return;
+                }
+
+                // Can't move, stay as sand
+                fragColor = vec4(1.0, 0.0, 0.0, 1.0);
             }
         `;
 
-        // Render shader
+        // Render shader - sand with color variation like in the video
         const renderSrc = `#version 300 es
             precision highp float;
             uniform sampler2D u_tex;
+            uniform float u_time;
             in vec2 v_uv;
             out vec4 fragColor;
 
+            // Hash function for per-pixel variation
+            float hash(vec2 p) {
+                return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+            }
+
             void main() {
-                int m = int(texture(u_tex, v_uv).r * 255.0 + 0.5);
-                vec3 c;
-                if (m == 0) c = vec3(0.05, 0.05, 0.1);
-                else if (m == 1) c = vec3(0.9, 0.75, 0.4);
-                else if (m == 2) c = vec3(0.2, 0.5, 0.9);
-                else c = vec3(0.4, 0.4, 0.42);
-                fragColor = vec4(c, 1.0);
+                vec4 c = texture(u_tex, v_uv);
+                if (c.r < 0.5) {
+                    // Empty - dark background
+                    fragColor = vec4(0.05, 0.05, 0.1, 1.0);
+                } else {
+                    // Sand - vary color based on position for visual interest
+                    vec2 p = gl_FragCoord.xy;
+                    float h = hash(p);
+
+                    // Interpolate between dark and bright sand colors
+                    vec3 darkSand = vec3(0.76, 0.55, 0.25);
+                    vec3 brightSand = vec3(0.95, 0.82, 0.45);
+                    vec3 sandColor = mix(darkSand, brightSand, h);
+
+                    fragColor = vec4(sandColor, 1.0);
+                }
             }
         `;
 
@@ -233,12 +235,7 @@
                 vec2 p = v_uv * u_res;
                 float d = length(p - u_pos);
                 if (d < u_size) {
-                    int curMat = int(cur.r * 255.0 + 0.5);
-                    if (u_mat < 0.5 || curMat == 0) {
-                        fragColor = vec4(u_mat / 255.0, 0.0, 0.0, 1.0);
-                    } else {
-                        fragColor = cur;
-                    }
+                    fragColor = vec4(u_mat, 0.0, 0.0, 1.0);
                 } else {
                     fragColor = cur;
                 }
@@ -348,6 +345,7 @@
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, tex);
             gl.uniform1i(gl.getUniformLocation(renderProg, 'u_tex'), 0);
+            gl.uniform1f(gl.getUniformLocation(renderProg, 'u_time'), performance.now() / 1000);
 
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.viewport(0, 0, canvas.width, canvas.height);
@@ -442,7 +440,7 @@
 
             if (!paused) {
                 simulate();
-                simulate();  // Two steps per frame for faster settling
+                simulate();  // Two steps per frame for faster settling (from video)
             }
             render();
             requestAnimationFrame(loop);
