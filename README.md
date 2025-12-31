@@ -18,6 +18,23 @@ This project contains simulations exploring emergent behavior in complex systems
 | **Gravity** | N-body simulation | Orbital dynamics, collisions, ejections |
 | **Cache Sim** | CPU cache simulator | LRU/FIFO replacement policies |
 
+### Browser-Based GPU Simulations (WebGL)
+
+Interactive HTML simulations that run entirely in the browser using WebGL for GPU acceleration:
+
+| Simulation | Algorithm | Key Features |
+|------------|-----------|--------------|
+| **Falling Sand** | Cellular Automaton | True GPU-parallel, 4-phase race prevention |
+| **Sandpile** | Abelian Sandpile | Avalanche cascades, power laws |
+| **Ising Model** | Metropolis-Hastings | Phase transitions, GPU parallelism |
+| **Forest Fire** | Drossel-Schwabl | Fire spread, SOC behavior |
+| **Epidemic** | Agent-based SIR | Disease spread visualization |
+| **Gravity** | N-body Barnes-Hut | Orbital dynamics, collisions |
+| **Ant Colony** | Pheromone optimization | Path finding, emergent behavior |
+| **Noodle Loops** | Monte Carlo | Probability visualization |
+
+Open any `code_files/*_gpu.html` or `code_files/*.html` file in a browser.
+
 ### AI/ML Simulations
 
 | Project | Model | Key Achievement |
